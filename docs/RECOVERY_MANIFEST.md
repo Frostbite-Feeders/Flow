@@ -20,6 +20,11 @@ The live URL responded successfully on 2026-06-19:
 
 ## Recovered Assets
 
+Hash note: the SHA256 values below are source/download byte hashes. On Windows,
+Git may check out text files with CRLF endings when `core.autocrlf=true`, which
+changes working-tree SHA256 values without changing the normalized file content.
+Use `scripts/verify-baseline.ps1` for repeatable baseline checks.
+
 | File | Source | SHA256 |
 |---|---|---|
 | `app/inventory-test-live-capture.html` | `https://app.frostbitefeeders.com/inventory-test/` | `35DB9A1DCF90CCC60F95C5E14AE968E5FF7D4C3D9E564A01CBDF5BC10705FCAB` |
@@ -59,11 +64,11 @@ That strongly suggests the deployed app uses URL fragments for direct bin lookup
 
 ## Stabilization Plan
 
-1. Commit this recovered state in the `Flow` repo.
-2. Push the initial commit to GitHub once Adam approves publication.
+1. Keep the recovered state anchored at commit `8905de7b8c628c8d419ac306524ae1634588686b`.
+2. Tag that commit as `recovery-2026-06-19`.
 3. Find the actual deployment source for `app.frostbitefeeders.com`.
-4. If the live app source is found, replace `app/inventory-test-live-capture.html` with source code and keep the capture as evidence.
-5. Add a small import/validation script for the CSV baseline.
+4. If the live app source is found, add the source code and keep this capture as evidence.
+5. Run `scripts/verify-baseline.ps1` before changing product behavior.
 6. Preserve every future inventory export under `data/exports/`.
-7. Decide whether Supabase is still the backend plan or whether the current deployed app stores state elsewhere.
+7. Keep Shopify read-only until Adam explicitly approves a specific write path.
 

@@ -22,6 +22,8 @@ Recovered files:
 | `data/exports/frostbite-inventory-2026-06-18.csv` | June 18 inventory export, treated as the baseline recovery snapshot |
 | `legacy/phone-app/` | Older static PWA prototype, QR label generator, README, and Supabase schema |
 | `docs/RECOVERY_MANIFEST.md` | Evidence, hashes, and next stabilization steps |
+| `docs/STABILIZATION_PLAN.md` | Current guardrails, deploy-source status, and next stabilization checks |
+| `scripts/verify-baseline.ps1` | Repeatable baseline verifier for the live app, CSV, legacy files, Git, and Shopify read-only guard |
 
 ## Baseline Inventory
 
@@ -48,9 +50,11 @@ Important columns include `Bin`, `Room`, `Rack`, `Type`, `Status`, `SKU`, `Mothe
 
 Before changing product behavior:
 
-1. Commit this recovered state.
+1. Run `scripts\verify-baseline.ps1`.
 2. Confirm whether `app/inventory-test-live-capture.html` is only a deployed bundle capture or the true source artifact.
 3. Locate the deploy source for `app.frostbitefeeders.com`.
-4. Replace the live-capture file with real source if found.
+4. Replace the live-capture file with real source if found, but keep the capture as evidence.
 5. Preserve every future inventory export under `data/exports/`.
+6. Treat Shopify as read-only unless Adam explicitly approves a specific write path.
+7. Treat live browser QA as write-capable unless non-GET requests are intercepted and blocked.
 

@@ -1,0 +1,8 @@
+* text=auto
+
+# Keep recovered evidence byte-stable across Windows checkouts.
+*.csv text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.ps1 text eol=lf
