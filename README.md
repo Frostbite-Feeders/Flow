@@ -18,12 +18,14 @@ Recovered files:
 
 | Path | Purpose |
 |---|---|
+| `src/` | Local-first Frostbite Flow frontend for visually inspecting the recovered inventory baseline |
 | `app/inventory-test-live-capture.html` | HTML capture of the currently deployed inventory-test app |
 | `data/exports/frostbite-inventory-2026-06-18.csv` | June 18 inventory export, treated as the baseline recovery snapshot |
 | `legacy/phone-app/` | Older static PWA prototype, QR label generator, README, and Supabase schema |
 | `docs/RECOVERY_MANIFEST.md` | Evidence, hashes, and next stabilization steps |
 | `docs/STABILIZATION_PLAN.md` | Current guardrails, deploy-source status, and next stabilization checks |
 | `scripts/verify-baseline.ps1` | Repeatable baseline verifier for the live app, CSV, legacy files, Git, and Shopify read-only guard |
+| `scripts/qa-browser.mjs` | Browser QA that blocks non-GET/external requests and verifies QR/hash lookup |
 
 ## Baseline Inventory
 
@@ -45,6 +47,27 @@ Status split:
 | growout | 4 |
 
 Important columns include `Bin`, `Room`, `Rack`, `Type`, `Status`, `SKU`, `Mothers`, `Due Date`, `QR Target`, `SKU Freezer On Hand`, and `Shopify Variant IDs`.
+
+## Local Flow Cockpit
+
+The React/Vite frontend is a local-first sandbox for visually working with the recovered baseline. It reads `data/exports/frostbite-inventory-2026-06-18.csv` directly and does not call the live Flow, Supabase, or Shopify APIs on startup.
+
+```powershell
+npm install
+npm run dev
+```
+
+Then open `http://127.0.0.1:5173/`.
+
+Useful checks:
+
+```powershell
+npm run build
+npm run qa:browser
+npm run verify
+```
+
+The browser QA blocks non-GET and external requests, then verifies the app title, metrics, QR lookup, mobile hash lookup, and screenshots.
 
 ## Do Not Lose Again
 
