@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frostbite Feeders | QR Label Generator</title>
+    <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --cyan: #00d4ff;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: var(--cyan);
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+        
+        .form-section {
+            background: var(--bg-secondary);
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .form-section h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: var(--cyan);
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .form-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        label {
+            display: block;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: var(--bg-primary);
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--cyan);
+        }
+        
+        button {
+            padding: 14px 28px;
+            background: var(--cyan);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+        }
+        
+        /* Print Preview */
+        .print-preview {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 24px;
+        }
+        
+        .print-preview h3 {
+            color: #333;
+            margin-bottom: 16px;
+        }
+        
+        .label-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        
+        .label {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+            background: white;
+            page-break-inside: avoid;
+        }
+        
+        .label canvas {
+            max-width: 80px;
+            max-height: 80px;
+        }
+        
+        .label-code {
+            font-family: monospace;
+            font-size: 10px;
+            color: #333;
+            margin-top: 6px;
+            word-break: break-all;
+        }
+        
+        .label-type {
+            font-size: 9px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+        
+        .print-btn {
+            margin-top: 16px;
+            width: 100%;
+        }
+        
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container > *:not(.print-preview) {
+                display: none !important;
+            }
+            
+            .print-preview {
+                padding: 0;
+                margin: 0;
+            }
+            
+            .print-preview h3,
+            .print-btn {
+                display: none !important;
+            }
+            
+            .label-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 5mm;
+            }
+            
+            .label {
+                border: 0.5pt solid #999;
+                padding: 3mm;
+            }
+            
+            .label canvas {
+                max-width: 20mm;
+                max-height: 20mm;
+            }
+            
+            .label-code {
+                font-size: 8pt;
+            }
+        }
+        
+        /* QR Code Format Reference */
+        .format-ref {
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 24px;
+            font-size: 14px;
+        }
+        
+        .format-ref h4 {
+            color: var(--cyan);
+            margin-bottom: 12px;
+        }
+        
+        .format-ref code {
+            background: var(--bg-primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        .format-ref ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .format-ref li {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+        
+        .format-ref li strong {
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧊 Frostbite Feeders</h1>
+        <p class="subtitle">QR Label Generator</p>
+        
+        <!-- Breeding Bin Labels -->
+        <div class="form-section">
+            <h2>Breeding Bin Labels (Row 1: B01-B05)</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Rack</label>
+                    <select id="bin-rack">
+                        <option value="B01">B01 - Breeding 1</option>
+                        <option value="B02">B02 - Breeding 2</option>
+                        <option value="B03">B03 - Breeding 3</option>
+                        <option value="B04">B04 - Breeding 4</option>
+                        <option value="B05">B05 - Breeding 5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Levels (1-10)</label>
+                    <input type="text" id="bin-levels" value="1-10" placeholder="e.g., 1-10 or 1,2,3">
+                </div>
+                <div class="form-group">
+                    <label>Positions (1-6)</label>
+                    <input type="text" id="bin-positions" value="1-6" placeholder="e.g., 1-6">
+                </div>
+            </div>
+            <button onclick="generateBinLabels()">Generate Breeding Bin Labels</button>
+        </div>
+        
+        <!-- Grow-Out Bin Labels -->
+        <div class="form-section">
+            <h2>Grow-Out Bin Labels (Row 2: G01-G04)</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Rack</label>
+                    <select id="growout-rack">
+                        <option value="G01">G01 - Grow-Out 1</option>
+                        <option value="G02">G02 - Grow-Out 2</option>
+                        <option value="G03">G03 - Grow-Out 3</option>
+                        <option value="G04">G04 - Grow-Out 4</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Levels (1-10)</label>
+                    <input type="text" id="growout-levels" value="1-10">
+                </div>
+                <div class="form-group">
+                    <label>Positions (1-6)</label>
+                    <input type="text" id="growout-positions" value="1-6">
+                </div>
+            </div>
+            <button onclick="generateGrowoutLabels()">Generate Grow-Out Bin Labels</button>
+        </div>
+        
+        <!-- Maternity Bin Labels -->
+        <div class="form-section">
+            <h2>Maternity Bin Labels (Row 3: M01-M04)</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Rack</label>
+                    <select id="maternity-rack">
+                        <option value="M01">M01 - Maternity 1</option>
+                        <option value="M02">M02 - Maternity 2</option>
+                        <option value="M03">M03 - Maternity 3</option>
+                        <option value="M04">M04 - Maternity 4</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Levels (1-10)</label>
+                    <input type="text" id="maternity-levels" value="1-10">
+                </div>
+                <div class="form-group">
+                    <label>Positions (1-9)</label>
+                    <input type="text" id="maternity-positions" value="1-9">
+                </div>
+            </div>
+            <button onclick="generateMaternityLabels()">Generate Maternity Bin Labels</button>
+        </div>
+        
+        <!-- Breeder Labels -->
+        <div class="form-section">
+            <h2>Breeder Labels</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Rack</label>
+                    <select id="breeder-rack">
+                        <option value="B01">B01 - Breeding 1</option>
+                        <option value="B02">B02 - Breeding 2</option>
+                        <option value="B03">B03 - Breeding 3</option>
+                        <option value="B04">B04 - Breeding 4</option>
+                        <option value="B05">B05 - Breeding 5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Sex</label>
+                    <select id="breeder-sex">
+                        <option value="F">Female (→ Jumbo @ 6mo)</option>
+                        <option value="M">Male (→ Large @ 3mo)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Start Number</label>
+                    <input type="number" id="breeder-start" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Count</label>
+                    <input type="number" id="breeder-count" value="12" min="1" max="100">
+                </div>
+            </div>
+            <button onclick="generateBreederLabels()">Generate Breeder Labels</button>
+        </div>
+        
+        <!-- Frozen Inventory Labels -->
+        <div class="form-section">
+            <h2>Frozen Inventory Labels</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>SKU</label>
+                    <select id="frozen-sku">
+                        <option value="pinky">Pinky (1-13g)</option>
+                        <option value="fuzzy">Fuzzy (14-20g)</option>
+                        <option value="pup">Pup (20-30g)</option>
+                        <option value="weaned">Weaned (31-45g)</option>
+                        <option value="small" selected>Small (46-80g)</option>
+                        <option value="smedium">Sm/Med (80-120g)</option>
+                        <option value="medium">Medium (120-175g)</option>
+                        <option value="large">Large (175-300g) *Breeder</option>
+                        <option value="jumbo">Jumbo (300g+) *Breeder</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Location Prefix</label>
+                    <input type="text" id="frozen-location" value="LOC" placeholder="e.g., LOC, F1, BIN">
+                </div>
+                <div class="form-group">
+                    <label>Start Number</label>
+                    <input type="number" id="frozen-start" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Count</label>
+                    <input type="number" id="frozen-count" value="6" min="1" max="50">
+                </div>
+            </div>
+            <button onclick="generateFrozenLabels()">Generate Frozen Labels</button>
+        </div>
+        
+        <!-- Batch Labels -->
+        <div class="form-section">
+            <h2>Batch Labels</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Year</label>
+                    <input type="number" id="batch-year" value="2024" min="2024" max="2030">
+                </div>
+                <div class="form-group">
+                    <label>Start Number</label>
+                    <input type="number" id="batch-start" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Count</label>
+                    <input type="number" id="batch-count" value="12" min="1" max="100">
+                </div>
+            </div>
+            <button onclick="generateBatchLabels()">Generate Batch Labels</button>
+        </div>
+        
+        <!-- QR Code Format Reference -->
+        <div class="format-ref">
+            <h4>QR Code Format Reference</h4>
+            <ul>
+                <li><strong>Breeding Bin:</strong> <code>FF-BIN-B03-L5-P3</code> (Rack B03, Level 5, Position 3)</li>
+                <li><strong>Grow-Out Bin:</strong> <code>FF-BIN-G02-L4-P2</code> (Rack G02, Level 4, Position 2)</li>
+                <li><strong>Maternity Bin:</strong> <code>FF-BIN-M01-L2-P5</code> (Rack M01, Level 2, Position 5)</li>
+                <li><strong>Breeder:</strong> <code>FF-BREEDER-B01-F042</code> (Rack B01, Female 42) or <code>FF-BREEDER-B01-M012</code> (Male 12)</li>
+                <li><strong>Batch:</strong> <code>FF-BATCH-2024-0001</code> (Year-Sequential)</li>
+                <li><strong>Frozen:</strong> <code>FF-FROZEN-small-LOC01</code> (SKU-Location)</li>
+            </ul>
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
+                <h4>Facility Layout (13 Racks, 900 Tubs)</h4>
+                <ul>
+                    <li><strong>Row 1 - Breeding:</strong> B01-B05 (5 racks × 60 tubs = 300) - FB70, 10L × 6P</li>
+                    <li><strong>Row 2 - Grow-Out:</strong> G01-G04 (4 racks × 60 tubs = 240) - FB70, 10L × 6P</li>
+                    <li><strong>Row 3 - Maternity:</strong> M01-M04 (4 racks × 90 tubs = 360) - FB40, 10L × 9P</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Print Preview -->
+        <div class="print-preview" id="print-preview" style="display: none;">
+            <h3>Print Preview</h3>
+            <div class="label-grid" id="label-grid"></div>
+            <button class="print-btn" onclick="window.print()">🖨️ Print Labels</button>
+            <button class="print-btn secondary" onclick="document.getElementById('print-preview').style.display='none'">Close Preview</button>
+        </div>
+    </div>
+    
+    <script>
+        function generateLabels(codes, type) {
+            const grid = document.getElementById('label-grid');
+            const preview = document.getElementById('print-preview');
+            grid.innerHTML = '';
+            
+            codes.forEach((code, i) => {
+                const label = document.createElement('div');
+                label.className = 'label';
+                
+                const canvas = document.createElement('canvas');
+                label.appendChild(canvas);
+                
+                const codeDiv = document.createElement('div');
+                codeDiv.className = 'label-code';
+                codeDiv.textContent = code.replace('FF-', '');
+                label.appendChild(codeDiv);
+                
+                const typeDiv = document.createElement('div');
+                typeDiv.className = 'label-type';
+                typeDiv.textContent = type;
+                label.appendChild(typeDiv);
+                
+                grid.appendChild(label);
+                
+                QRCode.toCanvas(canvas, code, {
+                    width: 80,
+                    margin: 1,
+                    color: { dark: '#000000', light: '#ffffff' }
+                });
+            });
+            
+            preview.style.display = 'block';
+            preview.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Parse range like "1-10" or "1,2,3" into array of numbers
+        function parseRange(str) {
+            const nums = [];
+            str.split(',').forEach(part => {
+                part = part.trim();
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(n => parseInt(n.trim()));
+                    for (let i = start; i <= end; i++) nums.push(i);
+                } else {
+                    nums.push(parseInt(part));
+                }
+            });
+            return nums;
+        }
+        
+        function generateBinLabels() {
+            const rack = document.getElementById('bin-rack').value;
+            const levels = parseRange(document.getElementById('bin-levels').value);
+            const positions = parseRange(document.getElementById('bin-positions').value);
+            
+            const codes = [];
+            levels.forEach(level => {
+                positions.forEach(pos => {
+                    codes.push(`FF-BIN-${rack}-L${level}-P${pos}`);
+                });
+            });
+            
+            generateLabels(codes, `Breeding ${rack}`);
+        }
+        
+        function generateGrowoutLabels() {
+            const rack = document.getElementById('growout-rack').value;
+            const levels = parseRange(document.getElementById('growout-levels').value);
+            const positions = parseRange(document.getElementById('growout-positions').value);
+            
+            const codes = [];
+            levels.forEach(level => {
+                positions.forEach(pos => {
+                    codes.push(`FF-BIN-${rack}-L${level}-P${pos}`);
+                });
+            });
+            
+            generateLabels(codes, `Grow-Out ${rack}`);
+        }
+        
+        function generateMaternityLabels() {
+            const rack = document.getElementById('maternity-rack').value;
+            const levels = parseRange(document.getElementById('maternity-levels').value);
+            const positions = parseRange(document.getElementById('maternity-positions').value);
+            
+            const codes = [];
+            levels.forEach(level => {
+                positions.forEach(pos => {
+                    codes.push(`FF-BIN-${rack}-L${level}-P${pos}`);
+                });
+            });
+            
+            generateLabels(codes, `Maternity ${rack}`);
+        }
+        
+        function generateBreederLabels() {
+            const rack = document.getElementById('breeder-rack').value;
+            const sex = document.getElementById('breeder-sex').value;
+            const start = parseInt(document.getElementById('breeder-start').value);
+            const count = parseInt(document.getElementById('breeder-count').value);
+            
+            const codes = [];
+            for (let i = 0; i < count; i++) {
+                const num = String(start + i).padStart(3, '0');
+                codes.push(`FF-BREEDER-${rack}-${sex}${num}`);
+            }
+            
+            const sexLabel = sex === 'F' ? 'Female Breeder' : 'Male Breeder';
+            generateLabels(codes, `${sexLabel} (${rack})`);
+        }
+        
+        function generateFrozenLabels() {
+            const sku = document.getElementById('frozen-sku').value;
+            const location = document.getElementById('frozen-location').value;
+            const start = parseInt(document.getElementById('frozen-start').value);
+            const count = parseInt(document.getElementById('frozen-count').value);
+            
+            const codes = [];
+            for (let i = 0; i < count; i++) {
+                const num = String(start + i).padStart(2, '0');
+                codes.push(`FF-FROZEN-${sku}-${location}${num}`);
+            }
+            
+            generateLabels(codes, `Frozen - ${sku.charAt(0).toUpperCase() + sku.slice(1)}`);
+        }
+        
+        function generateBatchLabels() {
+            const year = document.getElementById('batch-year').value;
+            const start = parseInt(document.getElementById('batch-start').value);
+            const count = parseInt(document.getElementById('batch-count').value);
+            
+            const codes = [];
+            for (let i = 0; i < count; i++) {
+                const num = String(start + i).padStart(4, '0');
+                codes.push(`FF-BATCH-${year}-${num}`);
+            }
+            
+            generateLabels(codes, 'Harvest Batch');
+        }
+    </script>
+</body>
+</html>

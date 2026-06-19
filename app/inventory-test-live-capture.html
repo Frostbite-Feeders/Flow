@@ -1,0 +1,3783 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#08111f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Frostbite Flow">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <title>Frostbite Flow</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --surface: #0d1a2c;
+      --surface-2: #132238;
+      --surface-3: #1b2c45;
+      --line: #2b405e;
+      --text: #eff7ff;
+      --muted: #98aabe;
+      --ice: #68d7ee;
+      --green: #55d68a;
+      --yellow: #f7c948;
+      --red: #f36f6f;
+      --violet: #a78bfa;
+      --orange: #ff9f5a;
+      --shadow: 0 18px 52px rgba(0, 0, 0, 0.32);
+      --radius: 6px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+      color: inherit;
+    }
+
+    .app {
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+      background: rgba(8, 17, 31, 0.94);
+      border-bottom: 1px solid rgba(104, 215, 238, 0.14);
+      backdrop-filter: blur(16px);
+      width: 100vw;
+      max-width: 100vw;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .brandline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      max-width: 1180px;
+      min-width: 0;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .brand > div {
+      min-width: 0;
+    }
+
+    .mark {
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(104, 215, 238, 0.65);
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      color: var(--ice);
+      font-weight: 900;
+      box-shadow: 0 0 0 3px rgba(104, 215, 238, 0.09);
+      flex: 0 0 auto;
+    }
+
+    .brand-tag {
+      display: none;
+    }
+
+    h1 {
+      font-size: 1.05rem;
+      margin: 0;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.74rem;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clock {
+      color: var(--muted);
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+
+    main {
+      width: min(100vw, 1180px);
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 14px 12px 92px;
+      overflow-x: hidden;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card, .panel {
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+    }
+
+    .card {
+      padding: 12px;
+      min-height: 82px;
+    }
+
+    .metric {
+      font-size: clamp(1.45rem, 8vw, 2.2rem);
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .metric.small { font-size: 1.35rem; }
+
+    .label {
+      color: var(--muted);
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      margin-top: 8px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 20px 2px 10px;
+    }
+
+    .section-title h2 {
+      font-size: 0.92rem;
+      margin: 0;
+      text-transform: uppercase;
+      color: #dcecff;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.76rem;
+      min-width: 0;
+    }
+
+    .worklist {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .worklist > * { min-width: 0; }
+
+    .work-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 11px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      text-align: left;
+      width: 100%;
+    }
+
+    .ops-strip {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ops-card {
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      min-width: 0;
+    }
+
+    .ops-card.warn {
+      border-color: rgba(247, 201, 72, 0.36);
+      background: rgba(247, 201, 72, 0.08);
+    }
+
+    .ops-card.danger {
+      border-color: rgba(243, 111, 111, 0.32);
+      background: rgba(243, 111, 111, 0.08);
+    }
+
+    .ops-kicker {
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .ops-value {
+      display: block;
+      margin-top: 8px;
+      font-size: 1.25rem;
+      line-height: 1;
+      font-weight: 860;
+    }
+
+    .ops-detail {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.25;
+    }
+
+    .rack-command,
+    .inventory-command {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .command-panel {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+    }
+
+    .command-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .command-title {
+      font-size: 0.95rem;
+      font-weight: 840;
+      line-height: 1.15;
+      min-width: 0;
+    }
+
+    .command-sub {
+      color: var(--muted);
+      font-size: 0.76rem;
+      line-height: 1.3;
+      min-width: 0;
+    }
+
+    .status-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 25px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      font-size: 0.72rem;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .pill.ice { color: #061722; background: var(--ice); }
+    .pill.green { color: #03180c; background: var(--green); }
+    .pill.yellow { color: #201600; background: var(--yellow); }
+    .pill.red { color: #240708; background: var(--red); }
+    .pill.violet { color: #120b2b; background: var(--violet); }
+    .pill.orange { color: #1f0d00; background: var(--orange); }
+    .pill.dark { color: var(--text); background: var(--surface-3); }
+
+    .item-main {
+      min-width: 0;
+    }
+
+    .item-title {
+      display: block;
+      font-weight: 760;
+      font-size: 0.92rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-sub {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.77rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chev {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(82px + env(safe-area-inset-bottom));
+      transform: translate(-50%, 18px);
+      width: min(92vw, 460px);
+      padding: 12px 14px;
+      border: 1px solid rgba(85, 214, 138, 0.45);
+      border-radius: 8px;
+      background: rgba(12, 31, 31, 0.96);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.38);
+      color: var(--text);
+      font-weight: 760;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease, transform 160ms ease;
+      z-index: 60;
+    }
+
+    .toast.open {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .toast span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 650;
+    }
+
+    .segmented {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      gap: 6px;
+      padding: 5px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+
+    .segmented button {
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      min-height: 40px;
+      padding: 8px 10px;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .segmented button.active {
+      background: var(--surface-3);
+      color: var(--text);
+      box-shadow: 0 0 0 1px rgba(104, 215, 238, 0.18) inset;
+    }
+
+    .rack-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 2px 1px 10px;
+      scrollbar-width: none;
+    }
+
+    .rack-strip::-webkit-scrollbar { display: none; }
+
+    .rack-tab {
+      min-width: 76px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      padding: 9px 10px;
+      color: var(--muted);
+      text-align: left;
+    }
+
+    .rack-tab.active {
+      color: var(--text);
+      border-color: rgba(104, 215, 238, 0.55);
+      background: var(--surface-2);
+    }
+
+    .rack-tab strong {
+      display: block;
+      font-size: 0.84rem;
+      white-space: nowrap;
+    }
+
+    .rack-tab span {
+      display: block;
+      font-size: 0.68rem;
+      margin-top: 3px;
+    }
+
+    .bin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+      gap: 7px;
+    }
+
+    .bin {
+      min-height: 58px;
+      aspect-ratio: 1 / 0.9;
+      border-radius: 7px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      padding: 7px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      text-align: left;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bin::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--status-color, var(--line));
+    }
+
+    .bin-code {
+      font-size: 0.84rem;
+      font-weight: 820;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-left: 3px;
+    }
+
+    .bin-state {
+      color: var(--muted);
+      font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-left: 3px;
+    }
+
+    .flow-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .inventory-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .flow-card {
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+    }
+
+    .flow-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .flow-title {
+      font-weight: 820;
+      font-size: 0.95rem;
+    }
+
+    .bar {
+      height: 8px;
+      overflow: hidden;
+      background: #07101d;
+      border-radius: 999px;
+      margin-top: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .bar > span {
+      display: block;
+      height: 100%;
+      width: var(--pct);
+      background: var(--bar-color, var(--ice));
+    }
+
+    .stock-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+      max-width: 100%;
+      min-width: 0;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .stock-row.low-stock {
+      border-color: rgba(243, 111, 111, 0.35);
+      background: rgba(243, 111, 111, 0.07);
+    }
+
+    .stock-row.watch-stock {
+      border-color: rgba(247, 201, 72, 0.35);
+      background: rgba(247, 201, 72, 0.07);
+    }
+
+    .stock-count {
+      text-align: right;
+      min-width: 72px;
+    }
+
+    .stock-count strong {
+      display: block;
+      font-size: 1.05rem;
+    }
+
+    .stock-count span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+    }
+
+    .label-preview {
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px dashed rgba(104, 215, 238, 0.35);
+      border-radius: var(--radius);
+      background: #07101d;
+    }
+
+    .label-code {
+      font-size: 1.25rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      min-height: 44px;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      background: var(--surface-3);
+      border: 1px solid rgba(152, 170, 190, 0.22);
+      font-weight: 760;
+      font-size: 0.86rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn.primary {
+      background: var(--ice);
+      color: #061722;
+      border-color: transparent;
+    }
+
+    .btn.warn {
+      background: rgba(247, 201, 72, 0.13);
+      color: var(--yellow);
+      border-color: rgba(247, 201, 72, 0.35);
+    }
+
+    .btn.danger {
+      background: rgba(243, 111, 111, 0.13);
+      color: #ffaaaa;
+      border-color: rgba(243, 111, 111, 0.32);
+    }
+
+    .settings-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      border-radius: var(--radius);
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      min-height: 42px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: #07101d;
+      color: var(--text);
+      padding: 9px 10px;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 30;
+      transform: translateY(110%);
+      transition: transform 180ms ease;
+      background: var(--surface);
+      border-top: 1px solid rgba(104, 215, 238, 0.25);
+      box-shadow: var(--shadow);
+      border-radius: 12px 12px 0 0;
+      max-height: calc(100dvh - 50px);
+      overflow: auto;
+      padding: 14px 14px calc(18px + var(--safe-bottom));
+    }
+
+    .drawer.open { transform: translateY(0); }
+
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.54);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .scrim.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .drawer-title {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .x {
+      width: 38px;
+      height: 38px;
+      border-radius: 999px;
+      background: var(--surface-3);
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+
+    .detail-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .mini {
+      border-radius: var(--radius);
+      background: #07101d;
+      border: 1px solid rgba(152, 170, 190, 0.18);
+      padding: 9px;
+      min-height: 66px;
+    }
+
+    .mini strong {
+      display: block;
+      font-size: 1.08rem;
+    }
+
+    .mini span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.68rem;
+      text-transform: uppercase;
+    }
+
+    .event-log {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .event {
+      border-left: 3px solid var(--ice);
+      padding: 8px 9px;
+      background: #07101d;
+      border-radius: 0 7px 7px 0;
+    }
+
+    .event strong {
+      font-size: 0.82rem;
+    }
+
+    .event div {
+      color: var(--muted);
+      font-size: 0.72rem;
+      margin-top: 2px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      inset: auto 0 0 0;
+      z-index: 15;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0;
+      background: rgba(8, 17, 31, 0.96);
+      border-top: 1px solid rgba(104, 215, 238, 0.14);
+      padding: 7px 7px calc(7px + var(--safe-bottom));
+      backdrop-filter: blur(16px);
+    }
+
+    .nav-btn {
+      min-height: 58px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      gap: 3px;
+      font-size: 0.78rem;
+      font-weight: 760;
+    }
+
+    .nav-btn span:first-child {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1px solid currentColor;
+      display: grid;
+      place-items: center;
+      font-size: 0.7rem;
+    }
+
+    .nav-btn.active {
+      color: var(--ice);
+      background: rgba(104, 215, 238, 0.09);
+    }
+
+    .desktop-shell {
+      display: none;
+    }
+
+    @media (min-width: 760px) {
+      main { padding: 22px 22px 40px; }
+      .bottom-nav { display: none; }
+      .desktop-shell {
+        display: flex;
+        gap: 8px;
+      }
+      .desktop-shell .nav-btn {
+        min-height: 40px;
+        grid-auto-flow: column;
+        padding: 8px 12px;
+        border: 1px solid rgba(152, 170, 190, 0.18);
+        background: var(--surface);
+      }
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .flow-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .inventory-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .drawer {
+        left: auto;
+        width: 460px;
+        border-radius: 12px 0 0 12px;
+        max-height: 100dvh;
+        height: 100dvh;
+        transform: translateX(110%);
+      }
+      .drawer.open { transform: translateX(0); }
+      .bin-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+    }
+
+    @media (min-width: 1100px) {
+      body {
+        background: #f4f7fb;
+      }
+
+      .app {
+        display: block;
+        min-height: 100dvh;
+      }
+
+      .topbar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: 240px;
+        height: 100dvh;
+        padding: 18px 11px;
+        background: #020913;
+        border-right: 1px solid rgba(152, 170, 190, 0.2);
+        border-bottom: 0;
+        box-shadow: 12px 0 36px rgba(2, 9, 19, 0.14);
+      }
+
+      .brandline {
+        height: 100%;
+        max-width: none;
+        margin: 0;
+        align-items: stretch;
+        justify-content: flex-start;
+        flex-direction: column;
+      }
+
+      .brand {
+        gap: 12px;
+        padding: 2px 6px 18px;
+        border-bottom: 1px solid rgba(152, 170, 190, 0.18);
+      }
+
+      .mark {
+        width: 38px;
+        height: 38px;
+        border-color: rgba(88, 177, 225, 0.68);
+        color: #58b1e1;
+      }
+
+      h1 {
+        font-size: 1.02rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .subtitle {
+        color: #58b1e1;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .brand-tag {
+        display: block;
+        margin-top: 14px;
+        padding: 0 6px 12px;
+        color: #7e8da2;
+        font-size: 0.68rem;
+        font-weight: 760;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(152, 170, 190, 0.12);
+      }
+
+      .desktop-shell {
+        display: grid;
+        gap: 6px;
+        margin-top: 18px;
+        width: 100%;
+      }
+
+      .desktop-shell .nav-btn {
+        min-height: 42px;
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        justify-items: start;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid transparent;
+        background: transparent;
+        border-radius: 7px;
+        color: #aab8ca;
+      }
+
+      .desktop-shell .nav-btn.active {
+        color: #e9f6ff;
+        border-color: rgba(50, 120, 210, 0.65);
+        background: rgba(16, 47, 88, 0.82);
+      }
+
+      .desktop-shell .nav-btn span:first-child {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+      }
+
+      .clock {
+        margin-top: auto;
+        width: 100%;
+        border-radius: 7px;
+        background: rgba(13, 26, 44, 0.78);
+      }
+
+      main {
+        --bg: #f1f5f9;
+        --surface: #ffffff;
+        --surface-2: #f8fafc;
+        --surface-3: #e9eff6;
+        --line: #d7e1ec;
+        --text: #111c2d;
+        --muted: #627188;
+        --ice: #147ca8;
+        --green: #168254;
+        --yellow: #b77908;
+        --red: #c83b4b;
+        --orange: #b95f24;
+        --violet: #7157b8;
+        width: calc(100vw - 240px);
+        max-width: none;
+        min-height: 100dvh;
+        margin: 0 0 0 240px;
+        padding: 18px 24px 44px;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .card,
+      .panel,
+      .work-item,
+      .flow-card,
+      .stock-row,
+      .field,
+      .ops-card,
+      .segmented,
+      .rack-tab,
+      .bin,
+      .mini {
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045);
+      }
+
+      .card,
+      .panel,
+      .work-item,
+      .flow-card,
+      .stock-row,
+      .field,
+      .ops-card {
+        border-color: #d5dfeb;
+      }
+
+      .section-title {
+        margin-top: 18px;
+      }
+
+      .section-title h2 {
+        color: #122033;
+      }
+
+      .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .card {
+        min-height: 76px;
+        padding: 11px 12px;
+      }
+
+      .metric {
+        font-size: 1.78rem;
+      }
+
+      .metric.small {
+        font-size: 1.48rem;
+      }
+
+      .label,
+      .ops-kicker {
+        font-size: 0.69rem;
+        font-weight: 800;
+        color: #56677f;
+      }
+
+      .ops-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .work-item,
+      .stock-row {
+        min-height: 54px;
+      }
+
+      .bar,
+      .event,
+      .mini,
+      .label-preview,
+      .field input,
+      .field select,
+      .field textarea {
+        background: #f8fbff;
+      }
+
+      .btn {
+        background: #edf3fa;
+        border-color: #d8e2ee;
+      }
+
+      .btn.primary {
+        background: #0b6b9b;
+        color: #ffffff;
+      }
+
+      .work-item,
+      .stock-row,
+      .command-panel {
+        border-radius: 6px;
+      }
+
+      .ops-card,
+      .flow-card,
+      .card,
+      .panel {
+        border-radius: 6px;
+      }
+
+      .chev {
+        color: #486078;
+      }
+
+      .pill {
+        border-radius: 6px;
+        min-height: 23px;
+      }
+
+      .pill.ice,
+      .pill.green,
+      .pill.yellow,
+      .pill.red,
+      .pill.violet,
+      .pill.orange {
+        color: #ffffff;
+      }
+
+      .pill.dark {
+        color: #34465d;
+        background: #eef3f8;
+      }
+
+      .bin {
+        background: #ffffff;
+      }
+
+      .bin-grid {
+        gap: 5px;
+        grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+      }
+
+      .bin {
+        min-height: 50px;
+        aspect-ratio: 1 / 0.78;
+        border-radius: 5px;
+        padding: 6px;
+      }
+
+      .bin::before {
+        width: 3px;
+        opacity: 0.75;
+      }
+
+      .bin-code {
+        font-size: 0.76rem;
+      }
+
+      .bin-state {
+        font-size: 0.68rem;
+      }
+
+      .stock-row.low-stock,
+      .stock-row.watch-stock {
+        background: #ffffff;
+      }
+
+      .stock-row.low-stock {
+        border-color: #edc2ca;
+        box-shadow: inset 4px 0 0 rgba(200, 59, 75, 0.85), 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+
+      .stock-row.watch-stock {
+        border-color: #e6d3a9;
+        box-shadow: inset 4px 0 0 rgba(183, 121, 8, 0.85), 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+    }
+
+    @media (max-width: 759px) {
+      .ops-strip { grid-template-columns: 1fr; }
+      .brandline { align-items: flex-start; }
+      .clock { display: none; }
+      .section-title .hint {
+        max-width: 52%;
+        text-align: right;
+        white-space: normal;
+        line-height: 1.25;
+      }
+      .segmented button { min-height: 46px; font-size: 0.9rem; }
+      .rack-tab { min-width: 88px; }
+      .rack-tab strong { font-size: 0.9rem; }
+      .rack-tab span { font-size: 0.76rem; }
+      .bin { min-height: 66px; }
+      .stock-row { grid-template-columns: auto minmax(0, 1fr); }
+      .stock-count { text-align: left; grid-column: 2; min-width: 0; }
+      .stock-row .btn { grid-column: 1 / -1; }
+      .btn { min-height: 48px; font-size: 0.92rem; }
+      .item-title { font-size: 0.98rem; }
+      .item-sub { font-size: 0.84rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brandline">
+        <div class="brand">
+          <div class="mark">F</div>
+          <div>
+            <h1>Frostbite</h1>
+            <div class="subtitle">Feeders</div>
+          </div>
+        </div>
+        <div class="brand-tag">Frostbite Flow</div>
+        <nav class="desktop-shell" aria-label="Desktop navigation">
+          <button class="nav-btn active" data-nav="today"><span>T</span><span>Today</span></button>
+          <button class="nav-btn" data-nav="rooms"><span>R</span><span>Rooms</span></button>
+          <button class="nav-btn" data-nav="flow"><span>F</span><span>Flow</span></button>
+          <button class="nav-btn" data-nav="inventory"><span>I</span><span>Inventory</span></button>
+          <button class="nav-btn" data-nav="settings"><span>S</span><span>Settings</span></button>
+        </nav>
+        <div class="clock" id="clock">Today</div>
+      </div>
+    </header>
+
+    <main>
+      <section id="view-today" class="view active">
+        <div class="grid stats" id="summaryStats"></div>
+
+        <div class="section-title">
+          <h2>Flow To Freezer</h2>
+          <span class="hint" id="flowInventoryHint">Inventory consequence of floor work</span>
+        </div>
+        <div class="ops-strip" id="flowInventoryPanel"></div>
+
+        <div class="section-title">
+          <h2>Today Work</h2>
+          <span class="hint" id="workHint">Generated from active bins</span>
+        </div>
+        <div class="worklist" id="workList"></div>
+
+        <div class="section-title">
+          <h2>Quick Actions</h2>
+          <span class="hint">Fast floor logging</span>
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="scanBtn">Scan / Find Bin</button>
+          <button class="btn" data-nav="rooms">Open Rooms</button>
+          <button class="btn warn" id="dueCullBtn">Start Next Due Cull</button>
+          <button class="btn" id="exportBtn">Export CSV</button>
+        </div>
+
+        <div class="section-title">
+          <h2>Today Tally</h2>
+          <span class="hint">Recorded this shift</span>
+        </div>
+        <div class="worklist" id="todayTally"></div>
+      </section>
+
+      <section id="view-rooms" class="view">
+        <div class="ops-strip" id="roomCommand"></div>
+        <div class="segmented" id="roomTabs"></div>
+        <div class="rack-strip" id="rackTabs"></div>
+        <div class="section-title">
+          <h2 id="rackTitle">Rack</h2>
+          <span class="hint" id="rackHint"></span>
+        </div>
+        <div class="rack-command" id="rackCommand"></div>
+        <div class="bin-grid" id="binGrid"></div>
+      </section>
+
+      <section id="view-flow" class="view">
+        <div class="grid flow-grid" id="flowGrid"></div>
+        <div class="section-title">
+          <h2>SKU Targets</h2>
+          <span class="hint">Planning ranges</span>
+        </div>
+        <div class="worklist" id="skuList"></div>
+      </section>
+
+      <section id="view-inventory" class="view">
+        <div class="grid stats" id="inventoryStats"></div>
+        <div class="inventory-command" id="inventoryCommand"></div>
+        <div class="section-title">
+          <h2>Freezer Inventory</h2>
+          <span class="hint" id="inventoryHint">On hand by SKU</span>
+        </div>
+        <div class="worklist" id="freezerInventoryList"></div>
+        <div hidden id="shopifyDemandHint"></div>
+        <div hidden id="shopifyBridge"></div>
+        <div hidden id="shopifyPackQueue"></div>
+      </section>
+
+      <section id="view-settings" class="view">
+        <div class="settings-grid" id="settingsForm"></div>
+        <div class="section-title">
+          <h2>Frostbite Flow Backend</h2>
+          <span class="hint">Supabase sync</span>
+        </div>
+        <div class="worklist" id="flowSyncPanel"></div>
+        <div class="actions">
+          <button class="btn primary" id="saveSettingsBtn">Save Assumptions</button>
+          <button class="btn danger" id="resetDemoBtn">Reset Demo Data</button>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Mobile navigation">
+      <button class="nav-btn active" data-nav="today"><span>T</span><span>Today</span></button>
+      <button class="nav-btn" data-nav="rooms"><span>R</span><span>Rooms</span></button>
+      <button class="nav-btn" data-nav="flow"><span>F</span><span>Flow</span></button>
+      <button class="nav-btn" data-nav="inventory"><span>I</span><span>Inventory</span></button>
+      <button class="nav-btn" data-nav="settings"><span>S</span><span>Settings</span></button>
+    </nav>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-modal="true">
+    <div id="drawerContent"></div>
+  </aside>
+  <div class="scrim" id="modalScrim"></div>
+  <aside class="drawer" id="modalDrawer" aria-modal="true">
+    <div id="modalContent"></div>
+  </aside>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const STORAGE_KEY = 'frostbiteInventory_v0';
+    const BUILD_VERSION = 'sprint23b-console-inventory-cleanup-20260618';
+    const FLOW_API_BASE = '/api/flow';
+    console.log('[frostbite] app loaded', BUILD_VERSION);
+
+    const SKU_CONFIG = [
+      { code: 'pinky', label: 'Pinky', grams: '1-13g', cullDay: 5, demand: 2.3, color: 'red', stage: 'nursery' },
+      { code: 'fuzzy', label: 'Fuzzy', grams: '14-20g', cullDay: 9, demand: 9.3, color: 'orange', stage: 'nursery' },
+      { code: 'pup', label: 'Pup', grams: '21-30g', cullDay: 14, demand: 10.2, color: 'yellow', stage: 'nursery' },
+      { code: 'weaned', label: 'Weaned', grams: '31-45g', cullDay: 21, demand: 14.8, color: 'green', stage: 'nursery' },
+      { code: 'small', label: 'Small', grams: '46-80g', cullDay: 32, demand: 25.8, color: 'ice', stage: 'growout' },
+      { code: 'smedium', label: 'Smedium', grams: '81-120g', cullDay: 48, demand: 15.0, color: 'violet', stage: 'growout' },
+      { code: 'medium', label: 'Medium', grams: '121-175g', cullDay: 63, demand: 12.7, color: 'violet', stage: 'growout' },
+      { code: 'large', label: 'Large', grams: '175-300g', cullDay: null, demand: 7.7, color: 'dark', stage: 'colony' },
+      { code: 'jumbo', label: 'Jumbo', grams: 'Configurable', cullDay: null, demand: 2.2, color: 'dark', stage: 'colony' },
+    ];
+
+    const FREEZER_LOCATIONS = ['Freezer 1', 'Freezer 2', 'Freezer 3', 'Freezer 4', 'Freezer 5', 'Freezer 6', 'Freezer 7'];
+    const STAFF_OPTIONS = ['Zack', 'Deacon'];
+    const SHOPIFY_BRIDGE = {
+      mode: 'recon_only',
+      status: 'not_connected',
+      note: 'Map Frostbite SKU + pack size to Shopify variant IDs before any write-back.',
+    };
+    const SHOPIFY_VARIANT_MAP = {
+      pinky: [
+        { variantId: '46430270226588', sku: 'PNK-12CT', packCount: 12 },
+        { variantId: '46430270259356', sku: 'PNK-24CT', packCount: 24 },
+        { variantId: '46430270292124', sku: 'PNK-48CT', packCount: 48 },
+      ],
+      fuzzy: [
+        { variantId: '46430226186396', sku: 'FUZ-12CT', packCount: 12 },
+        { variantId: '46430226219164', sku: 'FUZ-24CT', packCount: 24 },
+        { variantId: '46430226251932', sku: 'FUZ-48CT', packCount: 48 },
+      ],
+      pup: [
+        { variantId: '46430145052828', sku: 'PUP-12CT', packCount: 12 },
+        { variantId: '46430145085596', sku: 'PUP-24CT', packCount: 24 },
+        { variantId: '46430145118364', sku: 'PUP-48CT', packCount: 48 },
+      ],
+      weaned: [
+        { variantId: '46430079877276', sku: 'WEAN-12CT', packCount: 12 },
+        { variantId: '46430079910044', sku: 'WEAN-24CT', packCount: 24 },
+        { variantId: '46430079942812', sku: 'WEAN-48CT', packCount: 48 },
+      ],
+      small: [
+        { variantId: '46429948280988', sku: 'SML-12CT', packCount: 12 },
+        { variantId: '46429948313756', sku: 'SML-24CT', packCount: 24 },
+        { variantId: '46429948346524', sku: 'SML-48CT', packCount: 48 },
+      ],
+      smedium: [
+        { variantId: '46429864460444', sku: 'SMED-12CT', packCount: 12 },
+        { variantId: '46429864493212', sku: 'SMED-24CT', packCount: 24 },
+        { variantId: '46429864525980', sku: 'SMED-48CT', packCount: 48 },
+      ],
+      medium: [
+        { variantId: '46429854531740', sku: 'MED-12CT', packCount: 12 },
+        { variantId: '46429854564508', sku: 'MED-24CT', packCount: 24 },
+        { variantId: '46429854597276', sku: 'MED-48CT', packCount: 48 },
+      ],
+      large: [
+        { variantId: '46429949460636', sku: 'LRG-12CT', packCount: 12 },
+        { variantId: '46429949493404', sku: 'LRG-24CT', packCount: 24 },
+        { variantId: '46429949526172', sku: 'LRG-48CT', packCount: 48 },
+      ],
+      jumbo: [
+        { variantId: '46429844897948', sku: 'JMB-12CT', packCount: 12 },
+        { variantId: '46429844930716', sku: 'JMB-24CT', packCount: 24 },
+      ],
+    };
+
+    const STATUS_META = {
+      breeding: { label: 'Breeding', color: '#55d68a' },
+      pregnant: { label: 'Pregnant', color: '#f7c948' },
+      ready_to_move: { label: 'Ready To Move', color: '#ff9f5a' },
+      nursery: { label: 'Nursery', color: '#68d7ee' },
+      vacation: { label: 'Vacation', color: '#a78bfa' },
+      growout: { label: 'Grow-out', color: '#ff9f5a' },
+      open: { label: 'Open', color: '#506780' },
+      retired: { label: 'Retired', color: '#f36f6f' },
+      colonyCull: { label: 'Colony Cull', color: '#f36f6f' },
+    };
+
+    const localISO = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+    const todayISO = () => localISO(new Date());
+    const addDays = (days) => {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      return localISO(d);
+    };
+
+    let shopifyVariantMap = SHOPIFY_VARIANT_MAP;
+    let state = loadState();
+    let activeView = 'today';
+    let activeRoom = 'breeding';
+    let activeRack = null;
+    let selectedBinId = null;
+    let pendingCull = null;
+    let pendingGrowoutCull = null;
+    let flowSync = {
+      status: 'local_only',
+      detail: 'Local device storage is active. API sync has not connected yet.',
+      lastSync: null,
+      syncing: false,
+    };
+    let shopifyDemand = {
+      status: 'not_checked',
+      detail: 'Shopify read-only order sync has not checked yet.',
+      generatedAt: null,
+      orderCount: 0,
+      queueCount: 0,
+      skuDemand: {},
+      packDemand: {},
+      packQueue: [],
+      unmatched: [],
+      query: '',
+    };
+    let flowRemoteLoaded = false;
+    let flowSaveTimer = null;
+
+    function loadState() {
+      const existing = localStorage.getItem(STORAGE_KEY);
+      if (existing) return migrateState(JSON.parse(existing));
+      const seeded = seedState();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      return seeded;
+    }
+
+    function migrateState(next) {
+      next.assumptions = next.assumptions || {};
+      next.bins = next.bins || {};
+      next.vacations = next.vacations || [];
+      next.freezerInventory = ensureFreezerInventory(next.freezerInventory);
+      next.freezerEvents = next.freezerEvents || [];
+      next.shopifyBridge = next.shopifyBridge || SHOPIFY_BRIDGE;
+      Object.values(next.bins || {}).forEach(bin => {
+        if (bin.pregnantFemales == null) bin.pregnantFemales = 0;
+        if (bin.birthDate == null) bin.birthDate = null;
+        if (bin.growoutStartDate == null) bin.growoutStartDate = null;
+        if (bin.sourceBin == null) bin.sourceBin = null;
+      });
+      next.assumptions.fullNurseryNeed = next.assumptions.fullNurseryNeed || 906;
+      saveMigrated(next);
+      return next;
+    }
+
+    function saveMigrated(next) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      scheduleFlowApiSave();
+    }
+
+    function seedState() {
+      const bins = {};
+      const events = [];
+      const assumptions = {
+        breedDays: 18,
+        preBirthDays: 2,
+        vacationDays: 7,
+        pupsPerLitter: 10,
+        survivalRate: 90,
+        activeBreedingFemales: 1890,
+        nurseryMotherSlots: 462,
+        fullNurseryNeed: 906,
+        growoutBins: 168,
+      };
+      const freezerInventory = ensureFreezerInventory();
+
+      function addBin(bin) {
+        bins[bin.id] = {
+          males: 0,
+          females: 0,
+          pregnantFemales: 0,
+          mothers: 0,
+          litterCount: 0,
+          skuTarget: null,
+          dueDate: null,
+          birthDate: null,
+          growoutStartDate: null,
+          sourceBin: null,
+          note: '',
+          events: [],
+          updatedAt: new Date().toISOString(),
+          ...bin,
+        };
+      }
+
+      for (let r = 1; r <= 6; r++) {
+        for (let b = 1; b <= 45; b++) {
+          const id = `BR${r}-70-${b}`;
+          addBin({
+            id,
+            code: `B${r}-${String(b).padStart(2, '0')}`,
+            room: 'breeding',
+            rack: `B${r}`,
+            rackLabel: `Breed ${r}`,
+            type: '70S',
+            status: 'breeding',
+            males: 1,
+            females: 7,
+            note: 'Active breeder bin',
+          });
+        }
+      }
+
+      for (let r = 1; r <= 4; r++) {
+        for (let b = 1; b <= 42; b++) {
+          addBin({
+            id: `GO${r}-70-${b}`,
+            code: `G${r}-${String(b).padStart(2, '0')}`,
+            room: 'growout',
+            rack: `G${r}`,
+            rackLabel: `Grow ${r}`,
+            type: '70S',
+            status: 'open',
+            note: 'Available grow-out position',
+          });
+        }
+      }
+
+      for (let r = 1; r <= 6; r++) {
+        for (let b = 1; b <= 31; b++) {
+          addBin({
+            id: `N55-${r}-${b}`,
+            code: `55-${r}-${String(b).padStart(2, '0')}`,
+            room: 'nursery',
+            rack: `N55-${r}`,
+            rackLabel: `55S ${r}`,
+            type: '55S',
+            status: 'open',
+            motherSlots: 2,
+          });
+        }
+      }
+
+      for (let r = 1; r <= 3; r++) {
+        for (let b = 1; b <= 30; b++) {
+          addBin({
+            id: `N10-${r}-${b}`,
+            code: `10-${r}-${String(b).padStart(2, '0')}`,
+            room: 'nursery',
+            rack: `N10-${r}`,
+            rackLabel: `10S ${r}`,
+            type: '10S',
+            status: 'open',
+            motherSlots: 1,
+          });
+        }
+      }
+
+      const nurserySamples = [
+        ['N55-1-1', 'pinky', -1, 2, 18],
+        ['N55-1-2', 'fuzzy', 0, 2, 19],
+        ['N55-1-3', 'pup', 2, 2, 18],
+        ['N55-1-4', 'weaned', 4, 2, 17],
+        ['N10-1-1', 'pinky', 1, 1, 9],
+        ['N10-1-2', 'weaned', 5, 1, 10],
+      ];
+
+      nurserySamples.forEach(([id, sku, dueOffset, mothers, litterCount]) => {
+        const bin = bins[id];
+        bin.status = 'nursery';
+        bin.skuTarget = sku;
+        bin.dueDate = addDays(dueOffset);
+        bin.birthDate = addDays(dueOffset - SKU_CONFIG.find(s => s.code === sku).cullDay);
+        bin.mothers = mothers;
+        bin.litterCount = litterCount;
+        bin.note = `${skuLabel(sku)} target`;
+        bin.events.push(makeEvent('seed', `Seeded ${skuLabel(sku)} nursery litter`, bin.note));
+      });
+
+      const growSamples = [
+        ['GO1-70-1', 'small', 42],
+        ['GO1-70-2', 'smedium', 36],
+        ['GO1-70-3', 'medium', 24],
+        ['GO1-70-4', 'small', 48],
+      ];
+
+      growSamples.forEach(([id, sku, count], i) => {
+        const bin = bins[id];
+        bin.status = 'growout';
+        bin.skuTarget = sku;
+        bin.litterCount = count;
+        bin.dueDate = addDays(i + 3);
+        bin.birthDate = addDays(i + 3 - SKU_CONFIG.find(s => s.code === sku).cullDay);
+        bin.growoutStartDate = addDays(i + 3 - SKU_CONFIG.find(s => s.code === sku).cullDay + 21);
+        bin.sourceBin = `55-1-0${i + 1}`;
+        bin.note = `${skuLabel(sku)} grow-out batch`;
+        bin.events.push(makeEvent('seed', `Seeded ${skuLabel(sku)} grow-out`, `${count} rats`));
+      });
+
+      return {
+        assumptions,
+        bins,
+        events,
+        vacations: [],
+        freezerInventory,
+        freezerEvents: [],
+        shopifyBridge: SHOPIFY_BRIDGE,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    function ensureFreezerInventory(existing = {}) {
+      return SKU_CONFIG.reduce((map, sku) => {
+        const current = existing[sku.code] || {};
+        map[sku.code] = {
+          sku: sku.code,
+          onHand: Number(current.onHand || 0),
+          reserved: Number(current.reserved || 0),
+          location: FREEZER_LOCATIONS.includes(current.location) ? current.location : FREEZER_LOCATIONS[0],
+          shopifyVariantId: current.shopifyVariantId || '',
+          shopifyInventoryItemId: current.shopifyInventoryItemId || '',
+          updatedAt: current.updatedAt || null,
+        };
+        return map;
+      }, {});
+    }
+
+    function makeEvent(type, title, note) {
+      return {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        type,
+        title,
+        note: note || '',
+        at: new Date().toISOString(),
+      };
+    }
+
+    function skuLabel(code) {
+      return SKU_CONFIG.find(s => s.code === code)?.label || 'No SKU';
+    }
+
+    function skuOptions(stage, selected = '') {
+      return SKU_CONFIG
+        .filter(s => s.stage === stage)
+        .map(s => `<option value="${s.code}" ${selected === s.code ? 'selected' : ''}>${s.label} · ${s.grams}</option>`)
+        .join('');
+    }
+
+    function staffOptions(selected = STAFF_OPTIONS[0]) {
+      return STAFF_OPTIONS
+        .map(name => `<option value="${name}" ${selected === name ? 'selected' : ''}>${name}</option>`)
+        .join('');
+    }
+
+    function postFlowEvent(path, payload) {
+      if (!flowRemoteLoaded) return;
+      flowApiRequest(path, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }).catch(error => {
+        console.warn('[frostbite] remote event write failed', path, error.message);
+      });
+    }
+
+    function shopifyVariantsForSku(skuCode) {
+      return shopifyVariantMap[skuCode] || [];
+    }
+
+    function normalizeRemoteVariantMap(rows = []) {
+      return rows.reduce((map, row) => {
+        if (!row.sku_code) return map;
+        map[row.sku_code] = map[row.sku_code] || [];
+        map[row.sku_code].push({
+          variantId: row.variant_id,
+          sku: row.shopify_sku,
+          packCount: Number(row.pack_count || 0),
+        });
+        return map;
+      }, {});
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return 'No date';
+      const d = new Date(`${iso}T12:00:00`);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    }
+
+    function daysUntil(iso) {
+      if (!iso) return null;
+      const now = new Date(`${todayISO()}T00:00:00`);
+      const d = new Date(`${iso}T00:00:00`);
+      return Math.round((d - now) / 86400000);
+    }
+
+    function roomLabel(room) {
+      return {
+        breeding: 'Breeding',
+        nursery: 'Nursery',
+        growout: 'Grow-out',
+      }[room] || room;
+    }
+
+    function binsArray() {
+      return Object.values(state.bins);
+    }
+
+    function byStatus(status) {
+      return binsArray().filter(b => b.status === status);
+    }
+
+    function currentStats() {
+      const bins = binsArray();
+      const nursery = bins.filter(b => b.room === 'nursery');
+      const nurserySlots = nursery.reduce((sum, b) => sum + (b.motherSlots || 0), 0);
+      const nurseryUsed = nursery.reduce((sum, b) => sum + (b.mothers || 0), 0);
+      const growout = bins.filter(b => b.room === 'growout');
+      const growoutUsed = growout.filter(b => b.status === 'growout').length;
+      const activeVacations = (state.vacations || []).filter(v => daysUntil(v.returnDate) >= 0);
+      const saleableWeekly = Math.round(
+        state.assumptions.activeBreedingFemales /
+        (Number(state.assumptions.breedDays) + Number(state.assumptions.preBirthDays) + 21 + Number(state.assumptions.vacationDays)) *
+        7 *
+        Number(state.assumptions.pupsPerLitter) *
+        (Number(state.assumptions.survivalRate) / 100)
+      );
+      return { bins, nurserySlots, nurseryUsed, growout, growoutUsed, activeVacations, saleableWeekly };
+    }
+
+    function render() {
+      renderClock();
+      renderNav();
+      renderToday();
+      renderRooms();
+      renderFlow();
+      renderInventory();
+      renderSettings();
+    }
+
+    function renderClock() {
+      const sub = document.querySelector('.subtitle');
+      if (sub) {
+        sub.textContent = window.matchMedia('(min-width: 1100px)').matches
+          ? 'Feeders'
+          : 'Facility ops + inventory';
+      }
+      document.getElementById('clock').textContent = new Date().toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+
+    function renderNav() {
+      document.querySelectorAll('[data-nav]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nav === activeView);
+      });
+      document.querySelectorAll('.view').forEach(view => {
+        view.classList.toggle('active', view.id === `view-${activeView}`);
+      });
+    }
+
+    function renderToday() {
+      const stats = currentStats();
+      const fullNeed = Number(state.assumptions.fullNurseryNeed || 906);
+      const nurseryPressure = Math.round((fullNeed / stats.nurserySlots) * 100);
+      const nurseryGap = Math.max(0, fullNeed - stats.nurserySlots);
+      const summary = [
+        { value: stats.saleableWeekly.toLocaleString(), label: 'Projected Rats / Week', color: 'var(--ice)' },
+        { value: `${stats.nurserySlots}/${fullNeed}`, label: 'Nursery Capacity / Full-Scale Need', color: 'var(--yellow)' },
+        { value: `${stats.growoutUsed}/${stats.growout.length}`, label: 'Grow-out Bins Used', color: 'var(--orange)' },
+        { value: dueBins().length, label: 'Bins Due Now', color: 'var(--red)' },
+      ];
+      document.getElementById('summaryStats').innerHTML = summary.map(s => `
+        <article class="card">
+          <div class="metric small" style="color:${s.color}">${s.value}</div>
+          <div class="label">${s.label}</div>
+        </article>
+      `).join('');
+
+      if (nurseryGap > 0) {
+        document.getElementById('summaryStats').insertAdjacentHTML('beforeend', `
+          <article class="card" style="grid-column:1/-1;border-color:rgba(247,201,72,.38);background:rgba(247,201,72,.08)">
+            <div class="metric small" style="color:var(--yellow)">${nurseryPressure}%</div>
+            <div class="label">Needs ${nurseryGap} more mother slots for full-scale production</div>
+          </article>
+        `);
+      }
+
+      renderFlowInventoryPanel();
+
+      const work = dueBins().slice(0, 12);
+      document.getElementById('workHint').textContent = `${dueBins().length} due or overdue`;
+      document.getElementById('workList').innerHTML = work.length
+        ? work.map(renderWorkItem).join('')
+        : `<div class="panel" style="padding:16px;color:var(--muted)">No culls or moves due today. Open Rooms to inspect active bins.</div>`;
+
+      document.querySelectorAll('[data-work-bin]').forEach(btn => {
+        btn.onclick = () => startDueWorkflow(state.bins[btn.dataset.workBin]);
+      });
+
+      renderTodayTally();
+    }
+
+    function renderFlowInventoryPanel() {
+      const freezer = freezerRows();
+      const dueCullBins = dueBins().filter(bin => ['nursery', 'growout'].includes(bin.status));
+      const readyNow = dueCullBins.reduce((sum, bin) => sum + Number(bin.litterCount || 0), 0);
+      const incoming7 = freezer.reduce((sum, row) => sum + Number(row.incoming7 || 0), 0);
+      const lowestCoverage = freezer
+        .filter(row => row.weeklyNeed > 0)
+        .sort((a, b) => a.coverageDays - b.coverageDays)[0];
+      const intakeLeaders = freezer
+        .filter(row => row.incoming7 > 0)
+        .sort((a, b) => b.incoming7 - a.incoming7)
+        .slice(0, 2)
+        .map(row => `${row.sku.label} ${row.incoming7}`)
+        .join(' · ');
+      const mappedVariants = freezer.reduce((sum, row) => sum + shopifyVariantsForSku(row.sku.code).length, 0);
+      const riskClass = lowestCoverage && lowestCoverage.coverageDays < 7 ? 'danger' : '';
+      const readyClass = readyNow > 0 ? 'warn' : '';
+
+      document.getElementById('flowInventoryHint').textContent = `${readyNow.toLocaleString()} ready now · ${incoming7.toLocaleString()} due within 7 days`;
+      document.getElementById('flowInventoryPanel').innerHTML = `
+        <article class="ops-card ${readyClass}">
+          <span class="ops-kicker">Cull Work Ready</span>
+          <strong class="ops-value" style="color:var(--yellow)">${readyNow.toLocaleString()}</strong>
+          <span class="ops-detail">${dueCullBins.length} bins will add freezer stock when logged.</span>
+        </article>
+        <article class="ops-card">
+          <span class="ops-kicker">Next 7-Day Intake</span>
+          <strong class="ops-value" style="color:var(--ice)">${incoming7.toLocaleString()}</strong>
+          <span class="ops-detail">${intakeLeaders || 'No dated nursery or grow-out intake due.'}</span>
+        </article>
+        <article class="ops-card ${riskClass}">
+          <span class="ops-kicker">Lowest Freezer Cover</span>
+          <strong class="ops-value" style="color:${riskClass ? 'var(--red)' : 'var(--green)'}">${lowestCoverage ? `${lowestCoverage.coverageDays}d` : '-'}</strong>
+          <span class="ops-detail">${lowestCoverage ? `${lowestCoverage.sku.label}: ${lowestCoverage.available.toLocaleString()} available vs ${lowestCoverage.weeklyNeed}/week.` : 'No store demand mix configured.'}</span>
+        </article>
+        <article class="ops-card">
+          <span class="ops-kicker">Shopify Readiness</span>
+          <strong class="ops-value" style="color:var(--green)">${mappedVariants}/26</strong>
+          <span class="ops-detail">${shopifyDemand.status === 'connected' ? `${totalShopifyDemand().toLocaleString()} rats soft-reserved from store orders.` : 'Read-only order sync is waiting on store credentials.'}</span>
+        </article>
+      `;
+    }
+
+    function renderTodayTally() {
+      const today = todayISO();
+      const events = binsArray().flatMap(bin => (bin.events || []).map(event => ({ bin, event })))
+        .filter(({ event }) => String(event.at || '').slice(0, 10) === today);
+      const culled = events.filter(({ event }) => event.title.toLowerCase().includes('culled')).length;
+      const vacation = (state.vacations || []).filter(v => v.startedAt === today)
+        .reduce((sum, v) => sum + Number(v.motherCount || 0), 0);
+      const pregnant = events.filter(({ event }) => event.title.toLowerCase().includes('pregnant')).length;
+      document.getElementById('todayTally').innerHTML = `
+        <div class="panel" style="padding:12px;display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px">
+          <span class="pill ice">${events.length}</span>
+          <span class="item-main">
+            <span class="item-title">${culled} cull actions · ${vacation} mothers to vacation</span>
+            <span class="item-sub">${pregnant} pregnant markings · ${events.length} total logged actions today</span>
+          </span>
+        </div>
+      `;
+    }
+
+    function dueBins() {
+      return binsArray()
+        .filter(b => b.dueDate && daysUntil(b.dueDate) <= 0 && (
+          ['nursery', 'growout'].includes(b.status) || (b.status === 'pregnant' && (b.pregnantFemales || 0) > 0)
+        ))
+        .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
+    }
+
+    function startDueWorkflow(bin = dueBins()[0]) {
+      if (!bin) return alert('No due culls or moves right now.');
+      activeView = 'rooms';
+      activeRoom = bin.room;
+      activeRack = bin.rack;
+      render();
+      openBin(bin.id);
+      if (bin.status === 'nursery') return openCullWorkflow(bin);
+      if (bin.status === 'growout') return openGrowoutCullWorkflow(bin);
+      if (bin.status === 'pregnant') return applyAction('move-pregnant-nursery');
+      return null;
+    }
+
+    function renderWorkItem(bin) {
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      const dayText = daysUntil(bin.dueDate) < 0 ? `${Math.abs(daysUntil(bin.dueDate))}d late` : 'Due today';
+      const action = bin.status === 'nursery'
+        ? 'Cull litter / move mother'
+        : (bin.status === 'pregnant' ? 'Move pregnant female to nursery' : 'Cull grow-out batch');
+      return `
+        <button class="work-item" data-work-bin="${bin.id}">
+          <span class="pill ${sku?.color || 'dark'}">${sku?.label || bin.status}</span>
+          <span class="item-main">
+            <span class="item-title">${bin.code} · ${action}</span>
+            <span class="item-sub">${roomLabel(bin.room)} / ${bin.rackLabel} · ${workSubLine(bin)} · ${fmtDate(bin.dueDate)}</span>
+          </span>
+          <span class="chev">Start · ${dayText}</span>
+        </button>
+      `;
+    }
+
+    function workSubLine(bin) {
+      if (bin.status === 'pregnant') return `${bin.pregnantFemales || 0} pregnant female(s)`;
+      if (bin.status === 'nursery') return `${bin.litterCount || 0} rats · ${ageLine(bin)}`;
+      if (bin.status === 'growout') return `${bin.litterCount || 0} rats · ${ageLine(bin)}`;
+      return binStateLine(bin);
+    }
+
+    function renderRooms() {
+      const rooms = ['breeding', 'nursery', 'growout'];
+      const roomBins = binsArray().filter(b => b.room === activeRoom);
+      const roomDue = roomBins.filter(b => b.dueDate && daysUntil(b.dueDate) <= 0);
+      const roomIncoming = roomBins.filter(b => b.dueDate && daysUntil(b.dueDate) > 0 && daysUntil(b.dueDate) <= 7);
+      const roomActive = roomBins.filter(b => b.status !== 'open');
+      const roomOpen = roomBins.length - roomActive.length;
+      const roomCapacity = activeRoom === 'nursery'
+        ? `${roomBins.reduce((sum, b) => sum + Number(b.mothers || 0), 0)}/${roomBins.reduce((sum, b) => sum + Number(b.motherSlots || 0), 0)} mothers`
+        : `${roomActive.length}/${roomBins.length} active`;
+      const nextFlow = {
+        breeding: 'Pregnant females move into nursery slots.',
+        nursery: 'Cull-ready litters add freezer stock or move to grow-out.',
+        growout: 'Finished batches add freezer stock by target SKU.',
+      }[activeRoom];
+
+      document.getElementById('roomCommand').innerHTML = `
+        <article class="ops-card">
+          <span class="ops-kicker">${roomLabel(activeRoom)} Capacity</span>
+          <strong class="ops-value" style="color:var(--ice)">${roomCapacity}</strong>
+          <span class="ops-detail">${roomOpen.toLocaleString()} open bins or slots available.</span>
+        </article>
+        <article class="ops-card ${roomDue.length ? 'warn' : ''}">
+          <span class="ops-kicker">Due Pressure</span>
+          <strong class="ops-value" style="color:${roomDue.length ? 'var(--yellow)' : 'var(--green)'}">${roomDue.length}</strong>
+          <span class="ops-detail">${roomIncoming.length} more due within 7 days.</span>
+        </article>
+        <article class="ops-card">
+          <span class="ops-kicker">Next Movement</span>
+          <strong class="ops-value" style="color:var(--green)">${activeRoom === 'breeding' ? 'Nursery' : 'Freezer'}</strong>
+          <span class="ops-detail">${nextFlow}</span>
+        </article>
+        <article class="ops-card">
+          <span class="ops-kicker">QR Rack Labels</span>
+          <strong class="ops-value" style="color:var(--ice)">${roomBins.length}</strong>
+          <span class="ops-detail">Each bin drawer already carries label text and QR target.</span>
+        </article>
+      `;
+
+      document.getElementById('roomTabs').innerHTML = rooms.map(room => `
+        <button class="${activeRoom === room ? 'active' : ''}" data-room="${room}">
+          ${roomLabel(room)}
+        </button>
+      `).join('');
+
+      document.querySelectorAll('[data-room]').forEach(btn => {
+        btn.onclick = () => {
+          activeRoom = btn.dataset.room;
+          activeRack = null;
+          render();
+        };
+      });
+
+      const racks = [...new Map(
+        binsArray()
+          .filter(b => b.room === activeRoom)
+          .map(b => [b.rack, { rack: b.rack, label: b.rackLabel }])
+      ).values()];
+
+      if (!activeRack && racks.length) activeRack = racks[0].rack;
+
+      document.getElementById('rackTabs').innerHTML = racks.map(r => {
+        const rackBins = binsArray().filter(b => b.rack === r.rack);
+        const active = activeCountForRack(rackBins);
+        const total = totalCountForRack(rackBins);
+        const label = activeLabelForRack(rackBins);
+        return `
+          <button class="rack-tab ${activeRack === r.rack ? 'active' : ''}" data-rack="${r.rack}">
+            <strong>${r.label}</strong>
+            <span>${active}/${total} ${label}</span>
+          </button>
+        `;
+      }).join('');
+
+      document.querySelectorAll('[data-rack]').forEach(btn => {
+        btn.onclick = () => {
+          activeRack = btn.dataset.rack;
+          render();
+        };
+      });
+
+      const visible = binsArray().filter(b => b.rack === activeRack);
+      const rackName = visible[0]?.rackLabel || 'Rack';
+      const rackDue = visible.filter(b => b.dueDate && daysUntil(b.dueDate) <= 0);
+      const rackOpen = visible.filter(b => b.status === 'open').length;
+      const statusCounts = visible.reduce((map, bin) => {
+        map[bin.status] = (map[bin.status] || 0) + 1;
+        return map;
+      }, {});
+      document.getElementById('rackTitle').textContent = rackName;
+      document.getElementById('rackHint').textContent = `${visible.length} bins · ${rackDue.length} due now`;
+      document.getElementById('rackCommand').innerHTML = `
+        <div class="command-panel">
+          <div class="command-row">
+            <div>
+              <div class="command-title">${rackName} operating status</div>
+              <div class="command-sub">${rackOpen} open · ${visible.length - rackOpen} active · scan any rack label to open its bin drawer.</div>
+            </div>
+            <span class="pill ${rackDue.length ? 'yellow' : 'green'}">${rackDue.length ? `${rackDue.length} due` : 'clear'}</span>
+          </div>
+          <div class="status-chips">
+            ${Object.entries(statusCounts).map(([status, count]) => {
+              const meta = STATUS_META[status] || STATUS_META.open;
+              return `<span class="pill dark" style="border-color:${meta.color};color:${meta.color}">${meta.label} ${count}</span>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+      document.getElementById('binGrid').innerHTML = visible.map(bin => {
+        const meta = STATUS_META[bin.status] || STATUS_META.open;
+        return `
+          <button class="bin" style="--status-color:${meta.color}" data-bin="${bin.id}">
+            <span class="bin-code">${bin.code}</span>
+            <span class="bin-state">${binStateLine(bin)}</span>
+          </button>
+        `;
+      }).join('');
+
+      document.querySelectorAll('[data-bin]').forEach(btn => {
+        btn.onclick = () => openBin(btn.dataset.bin);
+      });
+    }
+
+    function activeCountForRack(rackBins) {
+      if (rackBins[0]?.room === 'nursery') return rackBins.reduce((sum, b) => sum + Number(b.mothers || 0), 0);
+      return rackBins.filter(b => b.status !== 'open').length;
+    }
+
+    function totalCountForRack(rackBins) {
+      if (rackBins[0]?.room === 'nursery') return rackBins.reduce((sum, b) => sum + Number(b.motherSlots || 0), 0);
+      return rackBins.length;
+    }
+
+    function activeLabelForRack(rackBins) {
+      return rackBins[0]?.room === 'nursery' ? 'mother slots' : 'active';
+    }
+
+    function binStateLine(bin) {
+      if (bin.status === 'breeding') {
+        return (bin.pregnantFemales || 0) > 0
+          ? `${bin.pregnantFemales} preg · ${fmtDate(bin.dueDate)}`
+          : `${bin.males}M ${bin.females}F`;
+      }
+      if (bin.status === 'pregnant') return `${bin.pregnantFemales || 1} preg · ${daysUntil(bin.dueDate) <= 0 ? 'move now' : fmtDate(bin.dueDate)}`;
+      if (bin.status === 'nursery') return `D${ageInfo(bin)?.dayAge ?? '-'}/${ageInfo(bin)?.targetDay ?? '-'} ${skuLabel(bin.skuTarget)}`;
+      if (bin.status === 'growout') return `D${ageInfo(bin)?.dayAge ?? '-'}/${ageInfo(bin)?.targetDay ?? '-'} ${skuLabel(bin.skuTarget)}`;
+      if (bin.status === 'vacation') return `${bin.females || bin.mothers || 1}F rest`;
+      return STATUS_META[bin.status]?.label || 'Open';
+    }
+
+    function ageLine(bin) {
+      const info = ageInfo(bin);
+      if (!info) return skuLabel(bin.skuTarget);
+      if (info.remaining < 0) return `Day ${info.dayAge} of ${info.targetDay} - ${info.sku.label} - OVERDUE`;
+      return `Day ${info.dayAge} of ${info.targetDay} - ${info.sku.label} - ${info.remaining} days remaining`;
+    }
+
+    function ageInfo(bin) {
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      if (!sku || !sku.cullDay) return null;
+      const birth = bin.birthDate || (bin.dueDate ? addDaysFrom(bin.dueDate, -sku.cullDay) : null);
+      if (!birth) return null;
+      const dayAge = Math.max(0, dateDiffDays(birth, todayISO()));
+      const targetDay = sku.cullDay;
+      const remaining = targetDay - dayAge;
+      return { sku, dayAge, targetDay, remaining };
+    }
+
+    function dateDiffDays(fromISO, toISO) {
+      const from = new Date(`${fromISO}T00:00:00`);
+      const to = new Date(`${toISO}T00:00:00`);
+      return Math.round((to - from) / 86400000);
+    }
+
+    function addDaysFrom(iso, days) {
+      const d = new Date(`${iso}T12:00:00`);
+      d.setDate(d.getDate() + days);
+      return localISO(d);
+    }
+
+    function renderFlow() {
+      const stats = currentStats();
+      const fullNeed = Number(state.assumptions.fullNurseryNeed || 906);
+      const flow = [
+        {
+          title: 'Breeding Engine',
+          value: state.assumptions.activeBreedingFemales,
+          label: 'active females',
+          pct: 100,
+          color: 'var(--green)',
+          sub: `${state.assumptions.breedDays} day planning average`,
+        },
+        {
+          title: 'Nursery Pressure',
+          value: `${stats.nurserySlots}/${fullNeed}`,
+          label: 'slots vs need',
+          pct: Math.min(100, Math.round((stats.nurserySlots / fullNeed) * 100)),
+          color: 'var(--yellow)',
+          sub: `known bottleneck: ${Math.max(0, fullNeed - stats.nurserySlots)} slot gap at full scale`,
+        },
+        {
+          title: 'Grow-out Space',
+          value: `${stats.growoutUsed}/${stats.growout.length}`,
+          label: '70-series bins',
+          pct: Math.min(100, Math.round((stats.growoutUsed / stats.growout.length) * 100)),
+          color: 'var(--orange)',
+          sub: 'Small, Smedium, Medium batches',
+        },
+        {
+          title: 'Vacation',
+          value: stats.activeVacations.reduce((sum, v) => sum + Number(v.motherCount || 0), 0),
+          label: 'mothers resting',
+          pct: Math.min(100, stats.activeVacations.length * 8),
+          color: 'var(--violet)',
+          sub: `${state.assumptions.vacationDays} day recovery period`,
+        },
+        {
+          title: 'Due Culls',
+          value: dueBins().length,
+          label: 'ready now',
+          pct: Math.min(100, dueBins().length * 12),
+          color: 'var(--red)',
+          sub: 'nursery and grow-out combined',
+        },
+        {
+          title: 'Weekly Projection',
+          value: stats.saleableWeekly.toLocaleString(),
+          label: 'saleable rats',
+          pct: 78,
+          color: 'var(--ice)',
+          sub: 'planning estimate, not observed actuals yet',
+        },
+      ];
+
+      document.getElementById('flowGrid').innerHTML = flow.map(item => `
+        <article class="flow-card">
+          <div class="flow-head">
+            <div>
+              <div class="flow-title">${item.title}</div>
+              <div class="hint">${item.sub}</div>
+            </div>
+            <span class="pill dark">${item.label}</span>
+          </div>
+          <div class="metric small" style="margin-top:12px">${item.value}</div>
+          <div class="bar" style="--bar-color:${item.color};--pct:${item.pct}%"><span></span></div>
+        </article>
+      `).join('');
+
+      document.getElementById('skuList').innerHTML = SKU_CONFIG.map(sku => `
+        <div class="panel" style="padding:12px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px">
+          <span class="pill ${sku.color}">${sku.label}</span>
+          <span class="item-main">
+            <span class="item-title">${sku.grams}</span>
+            <span class="item-sub">${sku.cullDay ? `Target day ${sku.cullDay}` : 'Colony-management outcome'} · ${sku.demand}% Shopify mix</span>
+          </span>
+          <span class="pill dark">${sku.stage}</span>
+        </div>
+      `).join('');
+    }
+
+    function freezerRows() {
+      const stats = currentStats();
+      const incoming = incomingBySku();
+      return SKU_CONFIG.map(sku => {
+        const freezer = state.freezerInventory?.[sku.code] || ensureFreezerInventory()[sku.code];
+        const weeklyNeed = Math.round(stats.saleableWeekly * (Number(sku.demand || 0) / 100));
+        const available = Math.max(0, Number(freezer.onHand || 0) - Number(freezer.reserved || 0));
+        const dailyNeed = weeklyNeed / 7;
+        const coverageDays = dailyNeed > 0 ? Math.floor(available / dailyNeed) : 0;
+        return {
+          sku,
+          freezer,
+          weeklyNeed,
+          available,
+          coverageDays,
+          incoming7: incoming[sku.code] || 0,
+        };
+      });
+    }
+
+    function incomingBySku() {
+      return binsArray().reduce((map, bin) => {
+        if (!bin.skuTarget || !bin.dueDate || !['nursery', 'growout'].includes(bin.status)) return map;
+        const days = daysUntil(bin.dueDate);
+        if (days == null || days < 0 || days > 7) return map;
+        map[bin.skuTarget] = (map[bin.skuTarget] || 0) + Number(bin.litterCount || 0);
+        return map;
+      }, {});
+    }
+
+    function shopifyDemandForSku(skuCode) {
+      return Number(shopifyDemand.skuDemand?.[skuCode] || 0);
+    }
+
+    function totalShopifyDemand() {
+      return Object.values(shopifyDemand.skuDemand || {}).reduce((sum, count) => sum + Number(count || 0), 0);
+    }
+
+    function stockShortage(row) {
+      return Math.max(0, shopifyDemandForSku(row.sku.code) - Number(row.available || 0));
+    }
+
+    function renderInventory() {
+      const rows = freezerRows();
+      const totalOnHand = rows.reduce((sum, row) => sum + Number(row.freezer.onHand || 0), 0);
+      const totalReserved = rows.reduce((sum, row) => sum + Number(row.freezer.reserved || 0), 0);
+      const shopifyReserved = totalShopifyDemand();
+      const incoming7 = rows.reduce((sum, row) => sum + Number(row.incoming7 || 0), 0);
+      const mappedVariants = rows.reduce((sum, row) => sum + shopifyVariantsForSku(row.sku.code).length, 0);
+      const unmapped = rows.filter(row => shopifyVariantsForSku(row.sku.code).length === 0).length;
+      const totalShortage = rows.reduce((sum, row) => sum + stockShortage(row), 0);
+      const summary = [
+        { value: totalOnHand.toLocaleString(), label: 'Frozen Rats On Hand', color: 'var(--ice)' },
+        { value: Math.max(0, totalOnHand - totalReserved - shopifyReserved).toLocaleString(), label: 'Available After Orders', color: totalShortage ? 'var(--red)' : 'var(--green)' },
+        { value: incoming7.toLocaleString(), label: 'Due Into Freezer / 7 Days', color: 'var(--yellow)' },
+        { value: `${mappedVariants}/26`, label: `${unmapped} SKUs Missing Shopify Map`, color: 'var(--orange)' },
+      ];
+      document.getElementById('inventoryStats').innerHTML = summary.map(s => `
+        <article class="card">
+          <div class="metric small" style="color:${s.color}">${s.value}</div>
+          <div class="label">${s.label}</div>
+        </article>
+      `).join('');
+
+      const lowRows = rows.filter(row => stockShortage(row) > 0);
+      const watchRows = rows.filter(row => row.weeklyNeed > 0 && row.coverageDays < 14);
+      const recentFreezerEvents = (state.freezerEvents || []).slice(-5).reverse();
+      document.getElementById('inventoryCommand').innerHTML = `
+        <div class="command-panel">
+          <div class="command-row">
+            <div>
+              <div class="command-title">Freezer operating position</div>
+              <div class="command-sub">${FREEZER_LOCATIONS.length} freezers · ${shopifyReserved.toLocaleString()} rats soft-reserved from orders · ${totalShortage.toLocaleString()} short.</div>
+            </div>
+            <span class="pill ${lowRows.length ? 'red' : (watchRows.length ? 'yellow' : 'green')}">${lowRows.length ? 'short' : (watchRows.length ? 'watch' : 'covered')}</span>
+          </div>
+          <div class="status-chips">
+            ${rows.map(row => {
+              const tone = row.coverageDays < 7 ? 'red' : (row.coverageDays < 14 ? 'yellow' : row.sku.color);
+              return `<span class="pill ${tone}">${row.sku.label} ${row.available.toLocaleString()}</span>`;
+            }).join('')}
+          </div>
+          <div class="command-sub">${recentFreezerEvents.length
+            ? `Latest movement: ${recentFreezerEvents.map(event => `${skuLabel(event.sku)} ${event.mode} ${event.count}`).join(' · ')}`
+            : 'No freezer movement events recorded yet.'}</div>
+        </div>
+      `;
+
+      document.getElementById('inventoryHint').textContent = `${totalOnHand.toLocaleString()} frozen rats counted`;
+      document.getElementById('freezerInventoryList').innerHTML = rows.map(({ sku, freezer, weeklyNeed, available, coverageDays, incoming7 }) => {
+        const demand = shopifyDemandForSku(sku.code);
+        const shortage = Math.max(0, demand - available);
+        const coverage = coverageDays > 0 ? `${coverageDays}d cover` : 'count needed';
+        const variants = shopifyVariantsForSku(sku.code);
+        const variantText = variants.length
+          ? `${variants.map(v => v.packCount).join('/')}ct packs mapped`
+          : 'Shopify not mapped';
+        const stockClass = shortage > 0
+          ? 'low-stock'
+          : (weeklyNeed > 0 && coverageDays < 14 ? 'watch-stock' : '');
+        return `
+          <div class="stock-row ${stockClass}">
+            <span class="pill ${sku.color}">${sku.label}</span>
+            <span class="item-main">
+              <span class="item-title">${sku.grams} · ${freezer.location}</span>
+              <span class="item-sub">${weeklyNeed}/week target · ${incoming7} due in 7d · ${demand.toLocaleString()} order demand${shortage ? ` · ${shortage.toLocaleString()} short` : ''} · ${variantText}</span>
+            </span>
+            <span class="stock-count">
+              <strong>${available.toLocaleString()}</strong>
+              <span>${coverage}</span>
+            </span>
+            <button class="btn" data-freezer-adjust="${sku.code}">Adjust</button>
+          </div>
+        `;
+      }).join('');
+
+      document.querySelectorAll('[data-freezer-adjust]').forEach(btn => {
+        btn.onclick = () => openFreezerAdjustWorkflow(btn.dataset.freezerAdjust);
+      });
+
+      document.getElementById('shopifyBridge').innerHTML = `
+        <div class="panel" style="padding:12px;border-color:${shopifyDemand.status === 'connected' ? 'rgba(85,214,138,.32)' : 'rgba(247,201,72,.32)'};background:${shopifyDemand.status === 'connected' ? 'rgba(85,214,138,.07)' : 'rgba(247,201,72,.07)'}">
+          <div class="item-title">Shopify read-only demand: ${shopifyDemand.status.replace(/_/g, ' ')}</div>
+          <div class="item-sub">${escapeHtml(shopifyDemand.detail)} · ${mappedVariants} public rat pack variants mapped.</div>
+        </div>
+        <div class="panel" style="padding:12px">
+          <div class="item-title">Current sync direction</div>
+          <div class="item-sub">Shopify products and paid unfulfilled orders are read only. Flow soft-reserves demand and flags shortages; no Shopify inventory writes are enabled.</div>
+        </div>
+      `;
+
+      renderShopifyPackQueue(rows);
+    }
+
+    function renderShopifyPackQueue(rows) {
+      const queue = shopifyDemand.packQueue || [];
+      const hint = document.getElementById('shopifyDemandHint');
+      if (hint) {
+        hint.textContent = shopifyDemand.status === 'connected'
+          ? `${queue.length} pack lines · ${totalShopifyDemand().toLocaleString()} rats`
+          : shopifyDemand.status.replace(/_/g, ' ');
+      }
+      const container = document.getElementById('shopifyPackQueue');
+      if (!container) return;
+      if (shopifyDemand.status !== 'connected') {
+        container.innerHTML = `
+          <div class="panel" style="padding:12px">
+            <div class="item-title">${escapeHtml(shopifyDemand.detail)}</div>
+            <div class="item-sub">Set read-only Shopify credentials on the API to load paid, unfulfilled online and wholesale orders.</div>
+          </div>
+        `;
+        return;
+      }
+      if (!queue.length) {
+        container.innerHTML = `
+          <div class="panel" style="padding:12px">
+            <div class="item-title">No open pack lines from Shopify.</div>
+            <div class="item-sub">Paid unfulfilled Shopify orders will appear here when read-only sync finds them.</div>
+          </div>
+        `;
+        return;
+      }
+      const remainingStockBySku = Object.fromEntries(rows.map(row => [row.sku.code, row.available]));
+      container.innerHTML = queue.slice(0, 16).map(item => {
+        const available = Number(remainingStockBySku[item.skuCode] || 0);
+        const needed = Number(item.ratCount || 0);
+        const reserved = Math.min(available, needed);
+        const short = Math.max(0, needed - available);
+        remainingStockBySku[item.skuCode] = Math.max(0, available - needed);
+        const sku = SKU_CONFIG.find(s => s.code === item.skuCode);
+        return `
+          <div class="stock-row ${short ? 'low-stock' : ''}">
+            <span class="pill ${sku?.color || 'dark'}">${sku?.label || item.skuCode}</span>
+            <span class="item-main">
+              <span class="item-title">${escapeHtml(item.orderName)} · ${item.packUnits} x ${item.packCount}ct · ${escapeHtml(item.route)}</span>
+              <span class="item-sub">${escapeHtml(item.shopifySku || '')} · ${reserved.toLocaleString()} reserved${short ? ` · ${short.toLocaleString()} short` : ''}</span>
+            </span>
+            <span class="stock-count">
+              <strong>${needed.toLocaleString()}</strong>
+              <span>${short ? `${short} short` : 'reserved'}</span>
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openFreezerAdjustWorkflow(skuCode) {
+      const sku = SKU_CONFIG.find(item => item.code === skuCode);
+      const freezer = state.freezerInventory[skuCode];
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">${sku.label} Freezer Count</h3>
+            <div class="hint">${sku.grams} · current count ${Number(freezer.onHand || 0).toLocaleString()}</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Count action</label>
+          <select id="freezerMode">
+            <option value="set">Set actual count</option>
+            <option value="add">Add count</option>
+            <option value="remove">Remove count</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Rat count</label>
+          <input id="freezerCount" type="number" min="0" value="${Number(freezer.onHand || 0)}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Freezer location</label>
+          <select id="freezerLocation">
+            ${FREEZER_LOCATIONS.map(location => `<option ${freezer.location === location ? 'selected' : ''}>${location}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Staff</label>
+          <select id="freezerInitials">${staffOptions()}</select>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelFreezer">Cancel</button>
+          <button class="btn primary" id="saveFreezer">Save Count</button>
+        </div>
+      `);
+      document.getElementById('cancelFreezer').onclick = closeModal;
+      document.getElementById('saveFreezer').onclick = () => {
+        const mode = document.getElementById('freezerMode').value;
+        const count = Number(document.getElementById('freezerCount').value || 0);
+        const initials = document.getElementById('freezerInitials').value.trim();
+        if (!Number.isFinite(count) || count < 0 || !initials) return alert('Count and staff are required.');
+        freezer.location = document.getElementById('freezerLocation').value;
+        if (mode === 'set') freezer.onHand = count;
+        if (mode === 'add') freezer.onHand = Number(freezer.onHand || 0) + count;
+        if (mode === 'remove') freezer.onHand = Math.max(0, Number(freezer.onHand || 0) - count);
+        freezer.updatedAt = new Date().toISOString();
+        addFreezerEvent(skuCode, mode, count, initials, 'manual freezer count');
+        saveState();
+        closeModal();
+        render();
+        showToast('Freezer count saved', `${sku.label} · ${Number(freezer.onHand || 0).toLocaleString()} on hand`);
+      };
+    }
+
+    function renderSettings() {
+      const fields = [
+        ['breedDays', 'Days before nursery move', 'number'],
+        ['preBirthDays', 'Move to nursery days before birth', 'number'],
+        ['vacationDays', 'Vacation days', 'number'],
+        ['pupsPerLitter', 'Pups per litter', 'number'],
+        ['survivalRate', 'Expected litter survival rate', 'number'],
+        ['activeBreedingFemales', 'Active breeding females', 'number'],
+        ['nurseryMotherSlots', 'Nursery mother slots', 'number'],
+        ['fullNurseryNeed', 'Mother slots needed at full capacity', 'number'],
+        ['growoutBins', 'Grow-out bins', 'number'],
+      ];
+
+      document.getElementById('settingsForm').innerHTML = fields.map(([key, label, type]) => `
+        <div class="field">
+          <label for="${key}">${label}</label>
+          <input id="${key}" name="${key}" type="${type}" value="${state.assumptions[key]}">
+        </div>
+      `).join('');
+      renderFlowSyncPanel();
+    }
+
+    function renderFlowSyncPanel() {
+      const panel = document.getElementById('flowSyncPanel');
+      if (!panel) return;
+      const statusColor = flowSync.status === 'connected'
+        ? 'green'
+        : (flowSync.status === 'syncing' ? 'yellow' : 'orange');
+      panel.innerHTML = `
+        <div class="panel" style="padding:12px">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
+            <span class="pill ${statusColor}">${flowSync.status.replace(/_/g, ' ')}</span>
+            <span class="item-main">
+              <span class="item-title">${escapeHtml(flowSync.detail)}</span>
+              <span class="item-sub">Target ${FLOW_API_BASE} · ${flowSync.lastSync ? `Last sync ${new Date(flowSync.lastSync).toLocaleString()}` : 'No remote sync yet'}</span>
+            </span>
+          </div>
+          <div class="actions">
+            <button class="btn" id="flowPullBtn">Pull Remote</button>
+            <button class="btn primary" id="flowPushBtn">Push Local</button>
+          </div>
+        </div>
+      `;
+      const pull = document.getElementById('flowPullBtn');
+      const push = document.getElementById('flowPushBtn');
+      if (pull) pull.onclick = () => initFlowApiSync(true);
+      if (push) push.onclick = () => pushFlowApiState('manual push');
+    }
+
+    function setFlowSync(status, detail, lastSync = flowSync.lastSync) {
+      flowSync = { ...flowSync, status, detail, lastSync, syncing: status === 'syncing' };
+      renderFlowSyncPanel();
+    }
+
+    function flowApiHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        'x-tenant-id': 'frostbite',
+      };
+    }
+
+    async function flowApiRequest(path, options = {}) {
+      const response = await fetch(`${FLOW_API_BASE}${path}`, {
+        ...options,
+        headers: { ...flowApiHeaders(), ...(options.headers || {}) },
+      });
+      let body = null;
+      const text = await response.text();
+      if (text) {
+        try { body = JSON.parse(text); } catch { body = { error: text.slice(0, 180) }; }
+      }
+      if (!response.ok) {
+        const error = new Error(body?.error || body?.message || `Flow API ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      return body;
+    }
+
+    async function initFlowApiSync(force = false) {
+      if (flowRemoteLoaded && !force) return;
+      setFlowSync('syncing', 'Checking Frostbite Flow backend...');
+      try {
+        const health = await flowApiRequest('/health');
+        if (health?.status !== 'ok') {
+          flowRemoteLoaded = false;
+          setFlowSync('setup_needed', health?.message || 'Flow API is present, but Supabase is not ready yet.');
+          return;
+        }
+        const remote = await flowApiRequest('/state');
+        if (remote?.payload) {
+          state = migrateState(remote.payload);
+          saveMigrated(state);
+          flowRemoteLoaded = true;
+          setFlowSync('connected', 'Remote Flow state loaded from Supabase.', remote.updated_at || new Date().toISOString());
+          render();
+          return;
+        }
+        flowRemoteLoaded = true;
+        await pushFlowApiState('initial seed');
+      } catch (error) {
+        flowRemoteLoaded = false;
+        const setupDetail = error.status === 503
+          ? 'Flow API is present, but the new Supabase key or schema is not configured yet.'
+          : 'Flow API is not reachable from this app yet; local mode is still active.';
+        setFlowSync(error.status === 503 ? 'setup_needed' : 'local_only', setupDetail);
+      }
+    }
+
+    function scheduleFlowApiSave() {
+      if (!flowRemoteLoaded || flowSync.syncing) return;
+      clearTimeout(flowSaveTimer);
+      flowSaveTimer = setTimeout(() => pushFlowApiState('auto save'), 650);
+    }
+
+    async function pushFlowApiState(reason = 'auto save') {
+      setFlowSync('syncing', `Saving Flow state (${reason})...`);
+      try {
+        const result = await flowApiRequest('/state', {
+          method: 'PUT',
+          body: JSON.stringify({
+            payload: state,
+            updated_by: `frostbite-flow-app:${reason}`,
+          }),
+        });
+        flowRemoteLoaded = true;
+        setFlowSync('connected', 'Remote Flow state saved to Supabase.', result?.updated_at || new Date().toISOString());
+      } catch (error) {
+        const setupDetail = error.status === 503
+          ? 'Flow API is present, but the new Supabase key or schema is not configured yet.'
+          : `Remote save failed: ${error.message}`;
+        setFlowSync(error.status === 503 ? 'setup_needed' : 'local_only', setupDetail);
+      }
+    }
+
+    async function initShopifyReadOnly() {
+      shopifyDemand = {
+        ...shopifyDemand,
+        status: 'syncing',
+        detail: 'Checking Shopify read-only order demand...',
+      };
+      renderInventory();
+      try {
+        const variantRows = await flowApiRequest('/shopify-variants');
+        const remoteMap = normalizeRemoteVariantMap(Array.isArray(variantRows) ? variantRows : []);
+        if (Object.keys(remoteMap).length) shopifyVariantMap = remoteMap;
+        const health = await flowApiRequest('/shopify/health');
+        if (health?.status !== 'configured') {
+          shopifyDemand = {
+            ...shopifyDemand,
+            status: 'setup_needed',
+            detail: health?.message || 'Shopify read-only sync is not configured yet.',
+          };
+          renderInventory();
+          return;
+        }
+        const demand = await flowApiRequest('/shopify/demand');
+        shopifyDemand = {
+          status: 'connected',
+          detail: `${demand.orderCount || 0} open Shopify orders · ${demand.queueCount || 0} pack lines`,
+          generatedAt: demand.generatedAt || new Date().toISOString(),
+          orderCount: Number(demand.orderCount || 0),
+          queueCount: Number(demand.queueCount || 0),
+          skuDemand: demand.skuDemand || {},
+          packDemand: demand.packDemand || {},
+          packQueue: demand.packQueue || [],
+          unmatched: demand.unmatched || [],
+          query: demand.query || '',
+        };
+        renderInventory();
+      } catch (error) {
+        shopifyDemand = {
+          ...shopifyDemand,
+          status: error.status === 503 ? 'setup_needed' : 'local_only',
+          detail: error.status === 503
+            ? 'Shopify read-only token/domain are not configured yet.'
+            : `Shopify read-only sync failed: ${error.message}`,
+        };
+        renderInventory();
+      }
+    }
+
+    function detailFieldsForBin(bin) {
+      if (bin.room === 'breeding') {
+        return `
+          <div class="panel" style="padding:12px;margin-bottom:8px;border-color:rgba(85,214,138,.22)">
+            <div class="item-title">Breeder bin</div>
+            <div class="item-sub">${bin.males || 0} male · ${bin.females || 0} females · ${bin.pregnantFemales || 0} pregnant</div>
+          </div>
+        `;
+      }
+      if (bin.status === 'open') {
+        const message = bin.room === 'nursery'
+          ? `Open ${bin.type} nursery bin · ${(bin.motherSlots || 1)} mother slot${(bin.motherSlots || 1) === 1 ? '' : 's'} available`
+          : 'Open 70-series grow-out bin · ready for a weaned batch';
+        return `
+          <div class="panel" style="padding:12px;margin-bottom:8px;border-color:rgba(80,103,128,.35)">
+            <div class="item-title">Open bin</div>
+            <div class="item-sub">${message}</div>
+          </div>
+        `;
+      }
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      return `
+        <div class="panel" style="padding:12px;margin-bottom:8px;border-color:rgba(104,215,238,.26)">
+          <div class="item-title">${sku ? `${sku.label} · ${sku.grams}` : 'Active batch'}</div>
+          <div class="item-sub">Due ${bin.dueDate ? fmtDate(bin.dueDate) : 'not set'}${bin.sourceBin ? ` · From ${escapeHtml(bin.sourceBin)}` : ''}</div>
+        </div>
+      `;
+    }
+
+    function labelForBin(bin) {
+      const primary = bin.code;
+      const secondary = `${roomLabel(bin.room)} / ${bin.rackLabel} / ${bin.type}`;
+      const state = binStateLine(bin);
+      const action = bin.room === 'breeding'
+        ? 'Breeder rotation'
+        : (bin.room === 'nursery' ? 'Mother + litter' : 'Grow-out batch');
+      return { primary, secondary, state, action };
+    }
+
+    function qrTargetForBin(bin) {
+      const base = location.origin && location.origin !== 'null'
+        ? `${location.origin}${location.pathname}`
+        : 'https://app.frostbitefeeders.com/inventory-test/';
+      return `${base}#${encodeURIComponent(bin.code)}`;
+    }
+
+    function openBin(id) {
+      selectedBinId = id;
+      const bin = state.bins[id];
+      const meta = STATUS_META[bin.status] || STATUS_META.open;
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      const events = bin.events || [];
+      const label = labelForBin(bin);
+      document.getElementById('drawerContent').innerHTML = `
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">${bin.code}</h3>
+            <div class="hint">${roomLabel(bin.room)} / ${bin.rackLabel} / ${bin.type}</div>
+          </div>
+          <button class="x" id="closeDrawer">X</button>
+        </div>
+        <span class="pill dark" style="border-color:${meta.color};color:${meta.color}">${meta.label}</span>
+        ${sku ? `<span class="pill ${sku.color}" style="margin-left:6px">${sku.label} ${sku.grams}</span>` : ''}
+
+        <div class="detail-stats">
+          <div class="mini"><strong>${bin.males || 0}</strong><span>Males</span></div>
+          <div class="mini"><strong>${bin.females || bin.mothers || 0}</strong><span>Females / Moms</span></div>
+          <div class="mini"><strong>${bin.litterCount || 0}</strong><span>Rats / Litter</span></div>
+          <div class="mini"><strong>${bin.pregnantFemales || 0}</strong><span>Pregnant</span></div>
+          <div class="mini"><strong>${bin.birthDate ? dateDiffDays(bin.birthDate, todayISO()) : '-'}</strong><span>Age Days</span></div>
+          <div class="mini"><strong>${bin.dueDate ? fmtDate(bin.dueDate) : '-'}</strong><span>Due</span></div>
+        </div>
+
+        ${bin.status === 'nursery' || bin.status === 'growout' ? `
+          <div class="panel" style="padding:12px;margin-bottom:8px;border-color:rgba(104,215,238,.26)">
+            <div class="item-title">${ageLine(bin)}</div>
+            <div class="item-sub">${bin.birthDate ? `Born ${fmtDate(bin.birthDate)}` : 'Birth date not set'}${bin.sourceBin ? ` · From ${escapeHtml(bin.sourceBin)}` : ''}${bin.growoutStartDate ? ` · Grow-out ${fmtDate(bin.growoutStartDate)}` : ''}</div>
+          </div>
+        ` : ''}
+
+        ${detailFieldsForBin(bin)}
+        <div class="label-preview">
+          <div class="label-code">${escapeHtml(label.primary)}</div>
+          <div class="item-title" style="margin-top:6px">${escapeHtml(label.state)}</div>
+          <div class="item-sub">${escapeHtml(label.secondary)} · ${escapeHtml(label.action)}</div>
+          <div class="item-sub">QR ${escapeHtml(qrTargetForBin(bin))}</div>
+        </div>
+        ${bin.status !== 'open' ? `
+          <div class="field" style="margin-top:8px">
+            <label>Floor note</label>
+            <textarea id="detailNote" rows="2">${escapeHtml(bin.note || '')}</textarea>
+          </div>
+        ` : ''}
+
+        <div class="actions">
+          ${actionButtons(bin)}
+        </div>
+
+        <div class="section-title">
+          <h2>History</h2>
+          <span class="hint">${events.length} events</span>
+        </div>
+        <div class="event-log">
+          ${events.slice().reverse().slice(0, 8).map(e => `
+            <div class="event">
+              <strong>${escapeHtml(e.title)}</strong>
+              <div>${new Date(e.at).toLocaleString()}${e.note ? ` · ${escapeHtml(e.note)}` : ''}</div>
+            </div>
+          `).join('') || '<div class="hint">No events yet.</div>'}
+        </div>
+      `;
+      document.getElementById('scrim').classList.add('open');
+      document.getElementById('drawer').classList.add('open');
+      document.getElementById('closeDrawer').onclick = closeDrawer;
+      const detailSku = document.getElementById('detailSku');
+      const detailDue = document.getElementById('detailDue');
+      if (detailSku) detailSku.onchange = persistDetailEdits;
+      if (detailDue) detailDue.onchange = persistDetailEdits;
+      const detailNote = document.getElementById('detailNote');
+      if (detailNote) detailNote.onchange = persistDetailEdits;
+      document.querySelectorAll('[data-action]').forEach(btn => {
+        btn.onclick = () => applyAction(btn.dataset.action);
+      });
+    }
+
+    function openFindDrawer() {
+      const recent = dueBins().slice(0, 6);
+      document.getElementById('drawerContent').innerHTML = `
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Find Bin</h3>
+            <div class="hint">Type a bin code or scan into this field.</div>
+          </div>
+          <button class="x" id="closeDrawer">X</button>
+        </div>
+        <div class="field">
+          <label>Bin code</label>
+          <input id="findInput" type="search" placeholder="B1-02, 55-1-01, G1-04" autocomplete="off">
+        </div>
+        <div class="actions">
+          <button class="btn primary" id="findGo">Open Bin</button>
+          <button class="btn" id="findRooms">Open Rooms</button>
+        </div>
+        <div class="section-title">
+          <h2>Due Now</h2>
+          <span class="hint">${recent.length} quick links</span>
+        </div>
+        <div class="worklist">
+          ${recent.map(renderWorkItem).join('') || '<div class="hint">No due bins right now.</div>'}
+        </div>
+      `;
+      document.getElementById('scrim').classList.add('open');
+      document.getElementById('drawer').classList.add('open');
+      document.getElementById('closeDrawer').onclick = closeDrawer;
+      document.getElementById('findRooms').onclick = () => {
+        closeDrawer();
+        activeView = 'rooms';
+        render();
+      };
+      document.getElementById('findGo').onclick = () => {
+        const value = document.getElementById('findInput').value.trim();
+        const found = binsArray().find(b =>
+          b.code.toLowerCase() === value.toLowerCase() ||
+          b.id.toLowerCase() === value.toLowerCase()
+        );
+        if (!found) return alert('No matching bin found.');
+        closeDrawer();
+        activeView = 'rooms';
+        activeRoom = found.room;
+        activeRack = found.rack;
+        render();
+        openBin(found.id);
+      };
+      document.getElementById('findInput').focus();
+      document.querySelectorAll('[data-work-bin]').forEach(btn => {
+        btn.onclick = () => startDueWorkflow(state.bins[btn.dataset.workBin]);
+      });
+    }
+
+    function openModal(html) {
+      document.getElementById('modalContent').innerHTML = html;
+      document.getElementById('modalScrim').classList.add('open');
+      document.getElementById('modalDrawer').classList.add('open');
+      const close = document.getElementById('closeModal');
+      if (close) close.onclick = closeModal;
+    }
+
+    function closeModal() {
+      document.getElementById('modalScrim').classList.remove('open');
+      document.getElementById('modalDrawer').classList.remove('open');
+      document.getElementById('modalContent').innerHTML = '';
+    }
+
+    function openCullWorkflow(bin, step = 1, draft = {}) {
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      const count = draft.count ?? (bin.litterCount || Number(state.assumptions.pupsPerLitter));
+      const initials = draft.initials || STAFF_OPTIONS[0];
+      const destination = draft.destination || 'Vacation record only';
+
+      if (step === 1) {
+        openModal(`
+          <div class="drawer-head">
+            <div>
+              <h3 class="drawer-title">Confirm Cull</h3>
+              <div class="hint">${bin.code} · ${sku?.label || 'SKU'} · ${ageLine(bin)}</div>
+            </div>
+            <button class="x" id="closeModal">X</button>
+          </div>
+          <div class="field">
+            <label>Cull count</label>
+            <input id="cullCount" type="number" min="0" value="${count}">
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label>SKU</label>
+            <input value="${sku?.label || ''} ${sku?.grams || ''}" disabled>
+          </div>
+          <div class="actions">
+            <button class="btn" id="cancelCull">Cancel</button>
+            <button class="btn primary" id="nextCull">Next</button>
+          </div>
+        `);
+        document.getElementById('cancelCull').onclick = closeModal;
+        document.getElementById('nextCull').onclick = () => {
+          openCullWorkflow(bin, 2, { ...draft, count: Number(document.getElementById('cullCount').value || 0) });
+        };
+      }
+
+      if (step === 2) {
+        openModal(`
+          <div class="drawer-head">
+            <div>
+              <h3 class="drawer-title">Mother Vacation</h3>
+              <div class="hint">One mother slot leaves nursery today.</div>
+            </div>
+            <button class="x" id="closeModal">X</button>
+          </div>
+          <div class="field">
+            <label>Vacation destination</label>
+            <input id="vacationDestination" value="${escapeHtml(destination)}" placeholder="VAC-1" list="vacationOptions">
+            <datalist id="vacationOptions">
+              <option value="VAC-1"></option>
+              <option value="VAC-2"></option>
+              <option value="VAC-3"></option>
+              <option value="Vacation record only"></option>
+            </datalist>
+          </div>
+          <div class="panel" style="padding:12px;margin-top:8px">
+            <div class="item-title">Return around ${fmtDate(addDays(Number(state.assumptions.vacationDays)))}</div>
+            <div class="item-sub">${state.assumptions.vacationDays} day vacation period</div>
+          </div>
+          <div class="actions">
+            <button class="btn" id="backCull">Back</button>
+            <button class="btn primary" id="nextCull">Next</button>
+          </div>
+        `);
+        document.getElementById('backCull').onclick = () => openCullWorkflow(bin, 1, draft);
+        document.getElementById('nextCull').onclick = () => {
+          openCullWorkflow(bin, 3, { ...draft, count, destination: document.getElementById('vacationDestination').value.trim() || 'Vacation record only' });
+        };
+      }
+
+      if (step === 3) {
+        pendingCull = {
+          binId: bin.id,
+          count: Number(count || 0),
+          destination,
+          initials: initials || STAFF_OPTIONS[0],
+        };
+        openModal(`
+          <div class="drawer-head">
+            <div>
+              <h3 class="drawer-title">Staff</h3>
+              <div class="hint">Logged to bin history and shift tally.</div>
+            </div>
+            <button class="x" id="closeModal">X</button>
+          </div>
+          <div class="field">
+            <label>Staff</label>
+            <select id="cullInitials">${staffOptions(pendingCull.initials)}</select>
+          </div>
+          <div class="actions">
+            <button class="btn" id="backCull">Back</button>
+            <button class="btn primary" id="finishCull">Save Cull</button>
+          </div>
+        `);
+        document.getElementById('backCull').onclick = () => openCullWorkflow(bin, 2, draft);
+        document.getElementById('cullInitials').onchange = event => {
+          pendingCull.initials = event.target.value.trim() || STAFF_OPTIONS[0];
+        };
+        document.getElementById('finishCull').onclick = () => {
+          console.log('[frostbite] Done clicked, step 3', BUILD_VERSION);
+          console.log('[frostbite] Done using pending initials', pendingCull?.initials);
+          if (!pendingCull || !pendingCull.initials) {
+            alert('Staff is required.');
+            return;
+          }
+          console.log('[frostbite] Done calling global commit');
+          window.__frostbiteCommitCull();
+        };
+      }
+    }
+
+    window.__frostbiteCommitCull = function() {
+      console.log('[frostbite] global commit clicked', pendingCull);
+      if (!pendingCull) return alert('No pending cull found.');
+      const done = document.getElementById('finishCull');
+      if (done) {
+        done.disabled = true;
+        done.textContent = 'Saving...';
+      }
+      finishCullWorkflow(pendingCull.binId, {
+        count: pendingCull.count,
+        destination: pendingCull.destination,
+        initials: pendingCull.initials,
+      });
+    };
+
+    function finishCullWorkflow(binId, draft) {
+      try {
+        console.log('[frostbite] finishCullWorkflow entered', binId, draft);
+        const bin = state.bins[binId];
+        if (!bin) throw new Error(`Missing bin ${binId}`);
+        const skuCode = bin.skuTarget;
+        const sku = skuLabel(skuCode);
+        const count = Number(draft.count || 0);
+        const mothersLeaving = Math.min(1, Number(bin.mothers || 0));
+        const returnDate = addDays(Number(state.assumptions.vacationDays));
+        const nowStamp = new Date().toISOString();
+
+        addBinEvent(bin, `Culled ${count} as ${sku}`, `${draft.initials} · mother to ${draft.destination}`, {
+          sku: skuCode,
+          quantity: count,
+          initials: draft.initials || '',
+          source: bin.code,
+        });
+        addFreezerStock(skuCode, count, bin.code, draft.initials || '');
+        if (mothersLeaving > 0) {
+          state.vacations = state.vacations || [];
+          state.vacations.push({
+            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+            sourceBin: bin.code,
+            motherCount: mothersLeaving,
+            reason: `Litter culled as ${sku}`,
+            destination: draft.destination || 'Vacation record only',
+            initials: draft.initials || '',
+            startedAt: todayISO(),
+            returnDate,
+          });
+          addBinEvent(bin, `${mothersLeaving} mother to vacation`, `${draft.destination} · return ${fmtDate(returnDate)}`, {
+            quantity: mothersLeaving,
+            initials: draft.initials || '',
+            source: bin.code,
+          });
+        }
+
+        bin.mothers = Math.max(0, Number(bin.mothers || 0) - mothersLeaving);
+        bin.litterCount = 0;
+        bin.dueDate = null;
+        bin.birthDate = null;
+        if (bin.mothers === 0) {
+          bin.status = 'open';
+          bin.skuTarget = null;
+        }
+        bin.updatedAt = nowStamp;
+        saveState();
+        pendingCull = null;
+        console.log('[frostbite] finishCull saved');
+        document.getElementById('modalContent').innerHTML = `
+          <div class="drawer-head">
+            <div>
+              <h3 class="drawer-title">Cull Saved</h3>
+              <div class="hint">${bin.code} · ${count} ${sku} · ${mothersLeaving} mother to vacation</div>
+            </div>
+            <button class="x" id="closeModal">X</button>
+          </div>
+          <div class="panel" style="padding:12px;border-color:rgba(85,214,138,.35);background:rgba(85,214,138,.08)">
+            <div class="item-title">Saved. One nursery mother slot was freed.</div>
+            <div class="item-sub">Return around ${fmtDate(returnDate)}</div>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="finishClose">Close</button>
+          </div>
+        `;
+        document.getElementById('closeModal').onclick = closeModal;
+        document.getElementById('finishClose').onclick = () => {
+          closeModal();
+          closeDrawer();
+          state = loadState();
+          render();
+        };
+      } catch (error) {
+        console.error('[frostbite] finishCull failed', error);
+        alert(`Cull save failed: ${error.message}`);
+        const done = document.getElementById('finishCull');
+        if (done) {
+          done.disabled = false;
+          done.textContent = 'Done';
+        }
+      }
+    }
+
+    function openColonyWorkflow(bin) {
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Colony Cull</h3>
+            <div class="hint">${bin.code} · colony-management outcome</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Outcome</label>
+          <select id="colonyOutcome">
+            <option value="">Choose outcome</option>
+            <option value="large">Large 175-300g</option>
+            <option value="jumbo">Jumbo 300g+</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Reason</label>
+          <select id="colonyReason">
+            <option value="">Choose reason</option>
+            <option>Retired breeder</option>
+            <option>Excess female</option>
+            <option>Underperformer</option>
+            <option>Excess male</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Animal count</label>
+          <input id="colonyCount" type="number" min="1" value="${Math.max(1, Number(bin.females || 0) + Number(bin.males || 0))}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Staff</label>
+          <select id="colonyInitials">${staffOptions()}</select>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelColony">Cancel</button>
+          <button class="btn danger" id="confirmColony">Confirm Colony Cull</button>
+        </div>
+      `);
+      document.getElementById('cancelColony').onclick = closeModal;
+      document.getElementById('confirmColony').onclick = () => {
+        const outcome = document.getElementById('colonyOutcome').value;
+        const reason = document.getElementById('colonyReason').value;
+        const count = Number(document.getElementById('colonyCount').value || 0);
+        const initials = document.getElementById('colonyInitials').value.trim();
+        if (!outcome || !reason || !initials || count < 1) return alert('Outcome, reason, count, and staff are required.');
+        bin.status = 'colonyCull';
+        bin.skuTarget = outcome;
+        addBinEvent(bin, 'Colony-management cull', `${count} ${skuLabel(outcome)} · ${reason} · ${initials}`);
+        addFreezerStock(outcome, count, bin.code, initials);
+        bin.updatedAt = new Date().toISOString();
+        saveState();
+        closeModal();
+        render();
+        openBin(bin.id);
+      };
+    }
+
+    function openResetWorkflow() {
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Reset Demo Data?</h3>
+            <div class="hint">This clears local demo data and cannot be undone.</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="panel" style="padding:12px;border-color:rgba(243,111,111,.35);background:rgba(243,111,111,.08)">
+          <div class="item-title">Reset all bins, events, vacations, and local demo state.</div>
+          <div class="item-sub">Use this after a prototype update or before a fresh recon pass.</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelReset">Cancel</button>
+          <button class="btn danger" id="confirmReset">Reset</button>
+        </div>
+      `);
+      document.getElementById('cancelReset').onclick = closeModal;
+      document.getElementById('confirmReset').onclick = () => {
+        localStorage.removeItem(STORAGE_KEY);
+        state = loadState();
+        activeView = 'today';
+        activeRoom = 'breeding';
+        activeRack = null;
+        selectedBinId = null;
+        pendingCull = null;
+        pendingGrowoutCull = null;
+        closeModal();
+        closeDrawer();
+        render();
+        if (flowRemoteLoaded) pushFlowApiState('reset demo data');
+      };
+    }
+
+    function openMarkPregnantWorkflow(bin) {
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Mark Pregnant</h3>
+            <div class="hint">${bin.code} · ${bin.females || 0} females in bin</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Pregnant females</label>
+          <input id="pregnantCount" type="number" min="1" max="${bin.females || 7}" value="${bin.pregnantFemales || 1}">
+        </div>
+        <div class="panel" style="padding:12px;margin-top:8px">
+          <div class="item-title">Move to nursery around ${fmtDate(addDays(Number(state.assumptions.breedDays) + Number(state.assumptions.preBirthDays)))}</div>
+          <div class="item-sub">${state.assumptions.breedDays} breeding days + ${state.assumptions.preBirthDays} pre-birth move days</div>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelPregnant">Cancel</button>
+          <button class="btn primary" id="confirmPregnant">Save Pregnant</button>
+        </div>
+      `);
+      document.getElementById('cancelPregnant').onclick = closeModal;
+      document.getElementById('confirmPregnant').onclick = () => {
+        const input = document.getElementById('pregnantCount');
+        const count = Math.min(Number(input.value || 1), Number(bin.females || 7));
+        if (!Number.isFinite(count) || count < 1) return alert('Enter at least one pregnant female.');
+        bin.status = 'pregnant';
+        bin.pregnantFemales = count;
+        bin.skuTarget = null;
+        bin.dueDate = addDays(Number(state.assumptions.breedDays) + Number(state.assumptions.preBirthDays));
+        addBinEvent(bin, `${count} pregnant female(s) marked`, `Breeding in progress; move around ${fmtDate(bin.dueDate)}`);
+        bin.updatedAt = new Date().toISOString();
+        saveState();
+        closeModal();
+        render();
+        openBin(bin.id);
+      };
+    }
+
+    function openGrowoutCullWorkflow(bin) {
+      const sku = SKU_CONFIG.find(s => s.code === bin.skuTarget);
+      pendingGrowoutCull = {
+        binId: bin.id,
+        count: Number(bin.litterCount || 0),
+        initials: STAFF_OPTIONS[0],
+      };
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Cull Grow-out Batch</h3>
+            <div class="hint">${bin.code} · ${sku?.label || 'SKU'} · ${ageLine(bin)}</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Cull count</label>
+          <input id="growoutCullCount" type="number" min="0" value="${bin.litterCount || 0}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Staff</label>
+          <select id="growoutCullInitials">${staffOptions(pendingGrowoutCull.initials)}</select>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelGrowoutCull">Cancel</button>
+          <button class="btn primary" id="confirmGrowoutCull">Save Cull</button>
+        </div>
+      `);
+      document.getElementById('cancelGrowoutCull').onclick = () => {
+        pendingGrowoutCull = null;
+        closeModal();
+      };
+      document.getElementById('growoutCullCount').oninput = event => {
+        pendingGrowoutCull.count = Number(event.target.value || 0);
+      };
+      document.getElementById('growoutCullInitials').onchange = event => {
+        pendingGrowoutCull.initials = event.target.value.trim() || STAFF_OPTIONS[0];
+      };
+      document.getElementById('confirmGrowoutCull').onclick = () => {
+        if (!pendingGrowoutCull || !pendingGrowoutCull.initials) return alert('Staff is required.');
+        const count = Number(pendingGrowoutCull.count || 0);
+        const initials = pendingGrowoutCull.initials;
+        const skuCode = bin.skuTarget;
+        addBinEvent(bin, `Culled ${count} as ${skuLabel(bin.skuTarget)}`, `${initials} · grow-out batch`);
+        addFreezerStock(skuCode, count, bin.code, initials);
+        bin.status = 'open';
+        bin.litterCount = 0;
+        bin.mothers = 0;
+        bin.skuTarget = null;
+        bin.dueDate = null;
+        bin.birthDate = null;
+        bin.growoutStartDate = null;
+        bin.sourceBin = null;
+        bin.note = 'Available grow-out position';
+        bin.updatedAt = new Date().toISOString();
+        saveState();
+        pendingGrowoutCull = null;
+        closeModal();
+        closeDrawer();
+        render();
+      };
+    }
+
+    function openStartNurseryWorkflow(bin) {
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Start Nursery</h3>
+            <div class="hint">${bin.code} · place mother and litter target</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Source breeder bin</label>
+          <input id="nurserySource" placeholder="B1-03">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Mother count</label>
+          <input id="nurseryMothers" type="number" min="1" max="${bin.motherSlots || 1}" value="1">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>SKU target</label>
+          <select id="nurserySku">${skuOptions('nursery', 'pinky')}</select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Birth date</label>
+          <input id="nurseryBirth" type="date" value="${todayISO()}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Litter count</label>
+          <input id="nurseryCount" type="number" min="0" value="${state.assumptions.pupsPerLitter}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Staff</label>
+          <select id="nurseryInitials">${staffOptions()}</select>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelStartNursery">Cancel</button>
+          <button class="btn primary" id="confirmStartNursery">Save Nursery</button>
+        </div>
+      `);
+      document.getElementById('cancelStartNursery').onclick = closeModal;
+      document.getElementById('confirmStartNursery').onclick = () => {
+        const sku = SKU_CONFIG.find(s => s.code === document.getElementById('nurserySku').value);
+        const source = document.getElementById('nurserySource').value.trim().toUpperCase();
+        const mothers = Math.min(Number(document.getElementById('nurseryMothers').value || 1), Number(bin.motherSlots || 1));
+        const birthDate = document.getElementById('nurseryBirth').value || todayISO();
+        const count = Number(document.getElementById('nurseryCount').value || 0);
+        const initials = document.getElementById('nurseryInitials').value.trim();
+        if (!sku || mothers < 1 || !initials) return alert('Mother count, SKU target, and staff are required.');
+        bin.status = 'nursery';
+        bin.mothers = mothers;
+        bin.litterCount = count;
+        bin.skuTarget = sku.code;
+        bin.birthDate = birthDate;
+        bin.dueDate = addDaysFrom(birthDate, sku.cullDay);
+        bin.sourceBin = source || null;
+        bin.note = source ? `Mother from ${source}` : 'Nursery litter started';
+        addBinEvent(bin, 'Started nursery litter', `${count} rats · target ${sku.label} · ${initials}${source ? ` · from ${source}` : ''}`);
+        bin.updatedAt = new Date().toISOString();
+        saveState();
+        closeModal();
+        render();
+        openBin(bin.id);
+      };
+    }
+
+    function openStartGrowoutWorkflow(bin) {
+      openModal(`
+        <div class="drawer-head">
+          <div>
+            <h3 class="drawer-title">Start Grow-out</h3>
+            <div class="hint">${bin.code} · move weaned babies into this bin</div>
+          </div>
+          <button class="x" id="closeModal">X</button>
+        </div>
+        <div class="field">
+          <label>Source nursery bin</label>
+          <input id="growoutSource" placeholder="55-1-04">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>SKU target</label>
+          <select id="growoutSku">${skuOptions('growout', 'small')}</select>
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Rat count</label>
+          <input id="growoutCount" type="number" min="0" value="${state.assumptions.pupsPerLitter}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Birth date</label>
+          <input id="growoutBirth" type="date" value="${addDays(-21)}">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Staff</label>
+          <select id="growoutInitials">${staffOptions()}</select>
+        </div>
+        <div class="actions">
+          <button class="btn" id="cancelStartGrowout">Cancel</button>
+          <button class="btn primary" id="confirmStartGrowout">Save Grow-out</button>
+        </div>
+      `);
+      document.getElementById('cancelStartGrowout').onclick = closeModal;
+      document.getElementById('confirmStartGrowout').onclick = () => {
+        const sku = SKU_CONFIG.find(s => s.code === document.getElementById('growoutSku').value);
+        const source = document.getElementById('growoutSource').value.trim().toUpperCase();
+        const count = Number(document.getElementById('growoutCount').value || 0);
+        const birthDate = document.getElementById('growoutBirth').value || addDays(-21);
+        const initials = document.getElementById('growoutInitials').value.trim();
+        if (!sku || !initials) return alert('SKU target and staff are required.');
+        bin.status = 'growout';
+        bin.skuTarget = sku.code;
+        bin.litterCount = count;
+        bin.birthDate = birthDate;
+        bin.growoutStartDate = todayISO();
+        bin.sourceBin = source || null;
+        bin.dueDate = addDaysFrom(birthDate, sku.cullDay);
+        bin.note = source ? `From ${source}` : 'Grow-out batch started';
+        addBinEvent(bin, 'Started grow-out batch', `${count} rats · target ${sku.label} · ${initials}${source ? ` · from ${source}` : ''}`);
+        bin.updatedAt = new Date().toISOString();
+        saveState();
+        closeModal();
+        render();
+        openBin(bin.id);
+      };
+    }
+
+    function actionButtons(bin) {
+      const buttons = [];
+      if (bin.status === 'breeding') {
+        buttons.push(['mark-pregnant', 'Mark Pregnant', 'warn']);
+        buttons.push(['colony-cull', 'Colony Cull', 'danger']);
+      } else if (bin.status === 'pregnant') {
+        if (daysUntil(bin.dueDate) <= 0) {
+          buttons.push(['move-pregnant-nursery', 'Move Pregnant To Nursery', 'primary']);
+        } else {
+          buttons.push(['breeding-progress', `Breeding In Progress - ${daysUntil(bin.dueDate)}d Left`, '']);
+        }
+        buttons.push(['blocked-colony-cull', 'Pregnant - Cannot Cull', '']);
+      } else if (bin.status === 'nursery') {
+        buttons.push(['cull-sku', 'Cull Litter / Move Mother', 'primary']);
+        buttons.push(['move-growout', 'Move Babies To Grow-out', 'warn']);
+      } else if (bin.status === 'growout') {
+        buttons.push(['cull-sku', 'Cull Grow-out Batch', 'primary']);
+        buttons.push(['mark-open', 'Mark Open', '']);
+      } else if (bin.status === 'open') {
+        if (bin.room === 'nursery') {
+          buttons.push(['start-nursery', 'Start Nursery', 'primary']);
+        }
+        if (bin.room === 'growout') {
+          buttons.push(['start-growout', 'Start Grow-out', 'primary']);
+        }
+        if (bin.room === 'breeding') {
+          buttons.push(['start-breeding', 'Start Breeding', 'primary']);
+        }
+      } else {
+        buttons.push(['mark-open', 'Mark Open', '']);
+      }
+      return buttons.map(([action, label, kind]) => `
+        <button class="btn ${kind}" data-action="${action}" ${['blocked-colony-cull','breeding-progress'].includes(action) ? 'disabled' : ''}>${label}</button>
+      `).join('');
+    }
+
+    function persistDetailEdits() {
+      const bin = state.bins[selectedBinId];
+      const detailSku = document.getElementById('detailSku');
+      const detailDue = document.getElementById('detailDue');
+      const detailNote = document.getElementById('detailNote');
+      if (detailSku) bin.skuTarget = detailSku.value || null;
+      if (detailDue) bin.dueDate = detailDue.value || null;
+      if (detailNote) bin.note = detailNote.value;
+      bin.updatedAt = new Date().toISOString();
+      saveState();
+      render();
+    }
+
+    function applyAction(action) {
+      const bin = state.bins[selectedBinId];
+      const prev = bin.status;
+      if (action === 'blocked-colony-cull') return;
+      if (action === 'breeding-progress') return;
+      if (action === 'cull-sku' && bin.status === 'nursery') return openCullWorkflow(bin);
+      if (action === 'cull-sku' && bin.status === 'growout') return openGrowoutCullWorkflow(bin);
+      if (action === 'colony-cull') return openColonyWorkflow(bin);
+      if (action === 'mark-pregnant') return openMarkPregnantWorkflow(bin);
+      if (action === 'start-nursery') return openStartNurseryWorkflow(bin);
+      if (action === 'start-growout') return openStartGrowoutWorkflow(bin);
+      if (action === 'start-nursery') {
+        bin.status = 'nursery';
+        bin.mothers = bin.mothers || 1;
+        bin.litterCount = bin.litterCount || Number(state.assumptions.pupsPerLitter);
+        bin.skuTarget = bin.skuTarget || 'pinky';
+        bin.dueDate = bin.dueDate || addDays(SKU_CONFIG.find(s => s.code === bin.skuTarget).cullDay);
+        bin.birthDate = bin.birthDate || addDaysFrom(bin.dueDate, -SKU_CONFIG.find(s => s.code === bin.skuTarget).cullDay);
+        addBinEvent(bin, 'Started nursery litter', `Target ${skuLabel(bin.skuTarget)}`);
+      }
+      if (action === 'move-pregnant-nursery') {
+        const target = pickNurseryBin();
+        if (!target) return;
+        const skuCode = prompt('Target nursery SKU? pinky, fuzzy, pup, or weaned', 'pinky');
+        const sku = SKU_CONFIG.find(s => s.code === String(skuCode || '').toLowerCase() && s.stage === 'nursery');
+        if (!sku) return alert('Use pinky, fuzzy, pup, or weaned.');
+        const moving = Math.min(1, Number(bin.pregnantFemales || 0));
+        target.status = 'nursery';
+        target.mothers = (target.mothers || 0) + moving;
+        target.skuTarget = sku.code;
+        target.litterCount = Number(state.assumptions.pupsPerLitter);
+        target.birthDate = addDays(Number(state.assumptions.preBirthDays));
+        target.dueDate = addDays(Number(state.assumptions.preBirthDays) + Number(sku.cullDay));
+        target.sourceBin = bin.code;
+        target.note = `Pregnant female from ${bin.code}`;
+        addBinEvent(target, 'Pregnant female moved in', `From ${bin.code} · target ${sku.label}`);
+        bin.pregnantFemales = Math.max(0, Number(bin.pregnantFemales || 0) - moving);
+        bin.females = Math.max(0, Number(bin.females || 0) - moving);
+        if (bin.pregnantFemales === 0) bin.dueDate = null;
+        addBinEvent(bin, 'Pregnant female moved to nursery', `${target.code} · target ${sku.label}`);
+      }
+      if (action === 'cull-sku') {
+        const sku = skuLabel(bin.skuTarget);
+        if (!confirm(`Cull ${bin.litterCount || 0} as ${sku}? This will clear the bin${bin.status === 'nursery' ? ' and move mother(s) to vacation.' : '.'}`)) return;
+        addBinEvent(bin, `Culled ${bin.litterCount || 0} as ${sku}`, 'Inventory recorded locally');
+        bin.litterCount = 0;
+        bin.status = 'open';
+        bin.mothers = 0;
+        bin.dueDate = null;
+        bin.birthDate = null;
+      }
+      if (action === 'mother-vacation') {
+        if (!confirm('Move mother(s) to vacation and clear this nursery bin?')) return;
+        addVacation(bin, bin.mothers || 1, 'Manual mother vacation move');
+        addBinEvent(bin, 'Mother moved to vacation', `${state.assumptions.vacationDays} day rest`);
+        bin.status = 'open';
+        bin.mothers = 0;
+        bin.dueDate = addDays(Number(state.assumptions.vacationDays));
+      }
+      if (action === 'move-growout') {
+        const target = pickGrowoutBin();
+        if (!target) return;
+        const skuCode = prompt('Target grow-out SKU? small, smedium, or medium', bin.skuTarget && ['small','smedium','medium'].includes(bin.skuTarget) ? bin.skuTarget : 'small');
+        const sku = SKU_CONFIG.find(s => s.code === String(skuCode || '').toLowerCase() && s.stage === 'growout');
+        if (!sku) return alert('Use small, smedium, or medium.');
+        target.status = 'growout';
+        target.skuTarget = sku.code;
+        target.litterCount = bin.litterCount || Number(state.assumptions.pupsPerLitter);
+        target.birthDate = bin.birthDate || addDays(-21);
+        target.growoutStartDate = todayISO();
+        target.sourceBin = bin.code;
+        target.dueDate = addDays(Math.max(0, sku.cullDay - dateDiffDays(target.birthDate, todayISO())));
+        target.note = `From ${bin.code}`;
+        addBinEvent(target, 'Babies moved into grow-out', `From ${bin.code} · target ${sku.label}`);
+        addBinEvent(bin, 'Babies moved to grow-out', `${target.litterCount || 0} rats to ${target.code}`);
+        if ((bin.mothers || 0) > 0) {
+          addVacation(bin, bin.mothers, 'Babies moved to grow-out');
+          addBinEvent(bin, `${bin.mothers} mother(s) to vacation`, `Return around ${fmtDate(addDays(Number(state.assumptions.vacationDays)))}`);
+        }
+        bin.status = 'open';
+        bin.mothers = 0;
+        bin.litterCount = 0;
+        bin.dueDate = null;
+        bin.birthDate = null;
+      }
+      if (action === 'start-growout') {
+        bin.status = 'growout';
+        bin.skuTarget = bin.skuTarget || 'small';
+        bin.litterCount = bin.litterCount || Number(state.assumptions.pupsPerLitter);
+        bin.dueDate = bin.dueDate || addDays(10);
+        bin.birthDate = bin.birthDate || addDaysFrom(bin.dueDate, -SKU_CONFIG.find(s => s.code === bin.skuTarget).cullDay);
+        bin.growoutStartDate = bin.growoutStartDate || todayISO();
+        addBinEvent(bin, 'Started grow-out batch', `Target ${skuLabel(bin.skuTarget)}`);
+      }
+      if (action === 'start-breeding') {
+        bin.status = 'breeding';
+        bin.males = bin.males || 1;
+        bin.females = bin.females || 7;
+        bin.dueDate = null;
+        addBinEvent(bin, 'Started breeding bin', `${bin.males}M ${bin.females}F`);
+      }
+      if (action === 'mark-open') {
+        if (!confirm('Mark this bin open and clear current counts?')) return;
+        bin.status = 'open';
+        bin.mothers = 0;
+        bin.litterCount = 0;
+        bin.dueDate = null;
+        bin.birthDate = null;
+        bin.pregnantFemales = 0;
+        addBinEvent(bin, 'Marked open', '');
+      }
+      bin.updatedAt = new Date().toISOString();
+      saveState();
+      render();
+      openBin(bin.id);
+    }
+
+    function addBinEvent(bin, title, note, extra = {}) {
+      bin.events = bin.events || [];
+      const event = makeEvent(extra.eventType || 'action', title, note);
+      bin.events.push(event);
+      postFlowEvent('/bin-events', {
+        bin_code: bin.code,
+        event_type: event.type,
+        title: event.title,
+        note: event.note,
+        sku: extra.sku || bin.skuTarget || null,
+        quantity: extra.quantity == null ? null : Number(extra.quantity || 0),
+        initials: extra.initials || '',
+        source: extra.source || bin.sourceBin || '',
+        payload: {
+          local_event_id: event.id,
+          bin_id: bin.id,
+          room: bin.room,
+          rack: bin.rack,
+          status: bin.status,
+          at: event.at,
+        },
+      });
+    }
+
+    function addFreezerStock(skuCode, count, source, note) {
+      if (!skuCode || !state.freezerInventory?.[skuCode]) return;
+      const qty = Number(count || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return;
+      const freezer = state.freezerInventory[skuCode];
+      freezer.onHand = Number(freezer.onHand || 0) + qty;
+      freezer.updatedAt = new Date().toISOString();
+      addFreezerEvent(skuCode, 'add', qty, note || '', source || 'production cull');
+    }
+
+    function addFreezerEvent(skuCode, mode, count, initials, source) {
+      state.freezerEvents = state.freezerEvents || [];
+      const event = {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        sku: skuCode,
+        mode,
+        count: Number(count || 0),
+        initials: initials || '',
+        source: source || '',
+        at: new Date().toISOString(),
+      };
+      state.freezerEvents.push(event);
+      postFlowEvent('/freezer-events', {
+        sku: event.sku,
+        mode: event.mode,
+        count: event.count,
+        initials: event.initials,
+        source: event.source,
+        payload: { local_event_id: event.id, at: event.at },
+      });
+    }
+
+    function addVacation(sourceBin, motherCount, reason, destination = 'Vacation record only', initials = '') {
+      state.vacations = state.vacations || [];
+      state.vacations.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        sourceBin: sourceBin.code,
+        motherCount: Number(motherCount || 1),
+        reason: reason || '',
+        destination,
+        initials,
+        startedAt: todayISO(),
+        returnDate: addDays(Number(state.assumptions.vacationDays)),
+      });
+    }
+
+    function pickGrowoutBin() {
+      const open = binsArray().filter(b => b.room === 'growout' && b.status === 'open');
+      if (!open.length) {
+        alert('No open grow-out bins available.');
+        return null;
+      }
+      const requested = prompt('Grow-out destination bin code', open[0].code);
+      if (!requested) return null;
+      const target = open.find(b => b.code.toLowerCase() === requested.toLowerCase() || b.id.toLowerCase() === requested.toLowerCase());
+      if (!target) {
+        alert('That grow-out bin is not open or was not found.');
+        return null;
+      }
+      return target;
+    }
+
+    function pickNurseryBin() {
+      const open = binsArray().filter(b =>
+        b.room === 'nursery' &&
+        (b.mothers || 0) < (b.motherSlots || 1)
+      );
+      if (!open.length) {
+        alert('No nursery mother slots available.');
+        return null;
+      }
+      const requested = prompt('Nursery destination bin code', open[0].code);
+      if (!requested) return null;
+      const target = open.find(b => b.code.toLowerCase() === requested.toLowerCase() || b.id.toLowerCase() === requested.toLowerCase());
+      if (!target) {
+        alert('That nursery bin was not found or is full.');
+        return null;
+      }
+      return target;
+    }
+
+    function closeDrawer() {
+      document.getElementById('scrim').classList.remove('open');
+      document.getElementById('drawer').classList.remove('open');
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+      }[ch]));
+    }
+
+    let toastTimer = null;
+    function showToast(title, detail = '') {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.innerHTML = `${escapeHtml(title)}${detail ? `<span>${escapeHtml(detail)}</span>` : ''}`;
+      toast.classList.add('open');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('open'), 2600);
+    }
+
+    function exportSnapshot() {
+      const btn = document.getElementById('exportBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Exporting...';
+      }
+      const activeVacations = state.vacations || [];
+      const rows = [
+        [
+          'Bin',
+          'Room',
+          'Rack',
+          'Type',
+          'Status',
+          'SKU',
+          'Males',
+          'Females',
+          'Pregnant Females',
+          'Mothers',
+          'Mother Slots',
+          'Rats/Litter',
+          'Due Date',
+          'Birth Date',
+          'Grow-out Start',
+          'Source Bin',
+          'Active Vacation Mothers',
+          'Label Primary',
+          'Label Secondary',
+          'QR Target',
+          'SKU Freezer On Hand',
+          'Shopify Variant IDs',
+          'Last Event',
+          'Note',
+          'Updated At',
+        ],
+        ...binsArray().map(b => {
+          const label = labelForBin(b);
+          const freezer = b.skuTarget ? state.freezerInventory?.[b.skuTarget] : null;
+          const variants = shopifyVariantsForSku(b.skuTarget);
+          return [
+            b.code,
+            b.room,
+            b.rackLabel,
+            b.type,
+            b.status,
+            skuLabel(b.skuTarget),
+            b.males || 0,
+            b.females || 0,
+            b.pregnantFemales || 0,
+            b.mothers || 0,
+            b.motherSlots || '',
+            b.litterCount || 0,
+            b.dueDate || '',
+            b.birthDate || '',
+            b.growoutStartDate || '',
+            b.sourceBin || '',
+            activeVacations
+              .filter(v => v.sourceBin === b.code && daysUntil(v.returnDate) >= 0)
+              .reduce((sum, v) => sum + Number(v.motherCount || 0), 0),
+            label.primary,
+            `${label.secondary} · ${label.action}`,
+            qrTargetForBin(b),
+            freezer ? Number(freezer.onHand || 0) : '',
+            variants.map(v => `${v.sku}:${v.variantId}`).join('|'),
+            (b.events || []).at(-1)?.title || '',
+            b.note || '',
+            b.updatedAt || '',
+          ];
+        }),
+      ];
+      const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `frostbite-inventory-${todayISO()}.csv`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      showToast('CSV exported', `${rows.length - 1} bins · ${a.download}`);
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        a.remove();
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Exported';
+          setTimeout(() => { btn.textContent = 'Export CSV'; }, 1200);
+        }
+      }, 300);
+    }
+
+    document.addEventListener('click', event => {
+      const nav = event.target.closest('[data-nav]');
+      if (nav) {
+        activeView = nav.dataset.nav;
+        render();
+      }
+    });
+
+    document.getElementById('scrim').onclick = closeDrawer;
+    document.getElementById('modalScrim').onclick = closeModal;
+    document.getElementById('exportBtn').onclick = exportSnapshot;
+    document.getElementById('dueCullBtn').onclick = () => startDueWorkflow();
+    document.getElementById('scanBtn').onclick = openFindDrawer;
+    document.getElementById('saveSettingsBtn').onclick = () => {
+      const next = {};
+      for (const input of document.querySelectorAll('#settingsForm input')) {
+        const value = Number(input.value);
+        if (!Number.isFinite(value) || value < 0) {
+          alert(`Check ${input.name}: enter a valid number.`);
+          return;
+        }
+        next[input.name] = value;
+      }
+      Object.assign(state.assumptions, next);
+      saveState();
+      render();
+      const btn = document.getElementById('saveSettingsBtn');
+      btn.textContent = 'Saved';
+      setTimeout(() => { btn.textContent = 'Save Assumptions'; }, 1200);
+    };
+    document.getElementById('resetDemoBtn').onclick = openResetWorkflow;
+
+    if (location.hash) {
+      const code = decodeURIComponent(location.hash.slice(1));
+      const found = binsArray().find(b => b.code === code || b.id === code);
+      if (found) {
+        activeView = 'rooms';
+        activeRoom = found.room;
+        activeRack = found.rack;
+        setTimeout(() => openBin(found.id), 0);
+      }
+    }
+
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      navigator.serviceWorker.getRegistrations()
+        .then(registrations => registrations
+          .filter(registration => registration.scope.includes('/inventory-test/'))
+          .forEach(registration => registration.unregister()))
+        .catch(() => {});
+      if ('caches' in window) {
+        caches.keys()
+          .then(keys => keys.filter(key => key.startsWith('frostbite-inventory')).forEach(key => caches.delete(key)))
+          .catch(() => {});
+      }
+    }
+
+    render();
+    setTimeout(() => initFlowApiSync(false), 0);
+    setTimeout(() => initShopifyReadOnly(), 250);
+  </script>
+</body>
+</html>

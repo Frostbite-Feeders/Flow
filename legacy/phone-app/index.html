@@ -1,0 +1,2120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0a0a">
+    <title>Frostbite Feeders | Inventory</title>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #141414;
+            --bg-tertiary: #1a1a1a;
+            --cyan: #00d4ff;
+            --cyan-dim: #00a8cc;
+            --cyan-glow: rgba(0, 212, 255, 0.3);
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --danger: #ff4444;
+            --success: #00ff88;
+            --warning: #ffaa00;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .app-container {
+            max-width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: var(--bg-secondary);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--cyan-dim);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            fill: var(--cyan);
+        }
+        
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--cyan);
+            letter-spacing: 1px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .icon-btn svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--text-primary);
+        }
+        
+        .icon-btn:active {
+            background: var(--cyan);
+        }
+        
+        .icon-btn:active svg {
+            stroke: var(--bg-primary);
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            padding-bottom: 100px;
+        }
+        
+        /* Screen Title */
+        .screen-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+        
+        /* Scanner Screen */
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--cyan);
+        }
+        
+        #qr-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scanner-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        
+        .scanner-frame {
+            width: 200px;
+            height: 200px;
+            border: 3px solid var(--cyan);
+            border-radius: 12px;
+            box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5), 0 0 20px var(--cyan-glow); }
+            50% { box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5), 0 0 40px var(--cyan-glow); }
+        }
+        
+        .scan-hint {
+            text-align: center;
+            margin-top: 20px;
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+        
+        /* Action Panel */
+        .action-panel {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .scanned-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--cyan);
+        }
+        
+        .scanned-item-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--cyan-glow);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .scanned-item-icon svg {
+            width: 28px;
+            height: 28px;
+            stroke: var(--cyan);
+        }
+        
+        .scanned-item-info h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .scanned-item-info p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        
+        /* Action Buttons */
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .action-btn {
+            padding: 20px 16px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+        }
+        
+        .action-btn svg {
+            width: 32px;
+            height: 32px;
+            stroke: var(--cyan);
+        }
+        
+        .action-btn:active {
+            background: var(--cyan);
+            color: var(--bg-primary);
+            transform: scale(0.98);
+        }
+        
+        .action-btn:active svg {
+            stroke: var(--bg-primary);
+        }
+        
+        .action-btn.danger {
+            border-color: var(--danger);
+        }
+        
+        .action-btn.danger svg {
+            stroke: var(--danger);
+        }
+        
+        .action-btn.danger:active {
+            background: var(--danger);
+        }
+        
+        .action-btn.success {
+            border-color: var(--success);
+        }
+        
+        .action-btn.success svg {
+            stroke: var(--success);
+        }
+        
+        .action-btn.success:active {
+            background: var(--success);
+        }
+        
+        /* Counter Component */
+        .counter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 24px 0;
+        }
+        
+        .counter-btn {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 2px solid var(--cyan);
+            background: var(--bg-tertiary);
+            color: var(--cyan);
+            font-size: 36px;
+            font-weight: 300;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .counter-btn:active {
+            background: var(--cyan);
+            color: var(--bg-primary);
+        }
+        
+        .counter-value {
+            font-size: 56px;
+            font-weight: 700;
+            min-width: 100px;
+            text-align: center;
+            color: var(--text-primary);
+        }
+        
+        /* SKU Grid for Grading */
+        .sku-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 16px 0;
+        }
+        
+        .sku-item {
+            background: var(--bg-tertiary);
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 12px 8px;
+            text-align: center;
+        }
+        
+        .sku-item.active {
+            border-color: var(--cyan);
+            background: var(--cyan-glow);
+        }
+        
+        .sku-name {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .sku-count {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+        
+        .sku-counter {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .sku-counter-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            border: 1px solid var(--cyan);
+            background: transparent;
+            color: var(--cyan);
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        .sku-counter-btn:active {
+            background: var(--cyan);
+            color: var(--bg-primary);
+        }
+        
+        /* Confirm Button */
+        .confirm-btn {
+            width: 100%;
+            padding: 18px;
+            border-radius: 12px;
+            border: none;
+            background: var(--cyan);
+            color: var(--bg-primary);
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .confirm-btn:active {
+            background: var(--cyan-dim);
+        }
+        
+        .confirm-btn:disabled {
+            background: #333;
+            color: #666;
+        }
+        
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-secondary);
+            border-top: 1px solid #333;
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        
+        .nav-item.active {
+            color: var(--cyan);
+        }
+        
+        .nav-item svg {
+            width: 28px;
+            height: 28px;
+        }
+        
+        .nav-item span {
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        /* Dashboard Cards */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #222;
+        }
+        
+        .stat-card.highlight {
+            border-color: var(--cyan);
+            background: linear-gradient(135deg, var(--bg-secondary), var(--cyan-glow));
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+        
+        .stat-card.highlight .stat-value {
+            color: var(--cyan);
+        }
+        
+        /* Module List */
+        .module-list {
+            margin-top: 24px;
+        }
+        
+        .module-item {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .module-info h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .module-info p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .module-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .module-status.active {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--success);
+        }
+        
+        .module-status.pending {
+            background: rgba(255, 170, 0, 0.2);
+            color: var(--warning);
+        }
+        
+        /* Frozen Inventory Table */
+        .inventory-section {
+            margin-top: 24px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .inventory-table {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .inventory-row {
+            display: flex;
+            padding: 14px 16px;
+            border-bottom: 1px solid #222;
+            align-items: center;
+        }
+        
+        .inventory-row:last-child {
+            border-bottom: none;
+        }
+        
+        .inventory-row.header {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        
+        .inv-sku {
+            flex: 1;
+            font-weight: 600;
+        }
+        
+        .inv-qty {
+            width: 80px;
+            text-align: right;
+            font-weight: 600;
+            color: var(--cyan);
+        }
+        
+        .inv-days {
+            width: 60px;
+            text-align: right;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        .inv-days.low {
+            color: var(--danger);
+        }
+        
+        .inv-days.ok {
+            color: var(--success);
+        }
+        
+        /* Photo Capture */
+        .photo-preview {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 16px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #333;
+        }
+        
+        .photo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-preview.empty {
+            flex-direction: column;
+            gap: 8px;
+            color: var(--text-secondary);
+        }
+        
+        .photo-preview svg {
+            width: 48px;
+            height: 48px;
+            stroke: var(--text-secondary);
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--cyan);
+            padding: 16px 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        .toast.success {
+            border-color: var(--success);
+        }
+        
+        .toast.error {
+            border-color: var(--danger);
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+        
+        /* Hidden screens */
+        .screen {
+            display: none;
+        }
+        
+        .screen.active {
+            display: block;
+        }
+        
+        /* Loading */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 16px;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--cyan);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 400px;
+            padding: 24px;
+            border: 1px solid var(--cyan);
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+        
+        .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .modal-btn.secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid #333;
+            color: var(--text-primary);
+        }
+        
+        .modal-btn.primary {
+            background: var(--cyan);
+            border: none;
+            color: var(--bg-primary);
+        }
+        
+        /* Select/Dropdown style */
+        .form-select {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            margin-bottom: 12px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2300d4ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 44px;
+        }
+        
+        .form-select:focus {
+            outline: none;
+            border-color: var(--cyan);
+        }
+        
+        /* Hidden file input */
+        .hidden-input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 32 32">
+                    <path d="M16 2L4 8v8c0 7.18 5.12 13.9 12 16 6.88-2.1 12-8.82 12-16V8L16 2z"/>
+                    <path d="M12 12l4 4 8-8" fill="none" stroke="#0a0a0a" stroke-width="2"/>
+                </svg>
+                <span class="logo-text">FROSTBITE</span>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="app.showSettings()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Scan Screen -->
+            <div class="screen active" id="screen-scan">
+                <h1 class="screen-title">Scan QR Code</h1>
+                
+                <div class="scanner-container">
+                    <video id="qr-video" autoplay playsinline></video>
+                    <div class="scanner-overlay">
+                        <div class="scanner-frame"></div>
+                    </div>
+                </div>
+                
+                <p class="scan-hint">Position QR code within the frame</p>
+            </div>
+
+            <!-- Action Screen (after scan) -->
+            <div class="screen" id="screen-action">
+                <h1 class="screen-title">Select Action</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="3" y1="9" x2="21" y2="9"></line>
+                                <line x1="9" y1="21" x2="9" y2="9"></line>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="scanned-title">Bin M1-042</h3>
+                            <p id="scanned-subtitle">Module 1 • Active Litter • 12 pups</p>
+                        </div>
+                    </div>
+                    
+                    <div class="action-grid" id="action-grid">
+                        <!-- Populated dynamically based on item type -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Litter Screen -->
+            <div class="screen" id="screen-new-litter">
+                <h1 class="screen-title">New Litter</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="litter-bin-title">Bin M1-042</h3>
+                            <p>Recording new litter</p>
+                        </div>
+                    </div>
+                    
+                    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 8px;">Pup Count</p>
+                    
+                    <div class="counter">
+                        <button class="counter-btn" onclick="app.adjustCount(-1)">−</button>
+                        <span class="counter-value" id="litter-count">8</span>
+                        <button class="counter-btn" onclick="app.adjustCount(1)">+</button>
+                    </div>
+                    
+                    <button class="confirm-btn" onclick="app.confirmNewLitter()">CONFIRM LITTER</button>
+                </div>
+            </div>
+
+            <!-- Mortality Screen -->
+            <div class="screen" id="screen-mortality">
+                <h1 class="screen-title">Log Mortality</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon" style="background: rgba(255, 68, 68, 0.2);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="15" y1="9" x2="9" y2="15"></line>
+                                <line x1="9" y1="9" x2="15" y2="15"></line>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="mortality-bin-title">Bin M1-042</h3>
+                            <p id="mortality-current">Current count: 12</p>
+                        </div>
+                    </div>
+                    
+                    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 8px;">Deaths to Log</p>
+                    
+                    <div class="counter">
+                        <button class="counter-btn" onclick="app.adjustMortality(-1)">−</button>
+                        <span class="counter-value" id="mortality-count">1</span>
+                        <button class="counter-btn" onclick="app.adjustMortality(1)">+</button>
+                    </div>
+                    
+                    <select class="form-select" id="mortality-reason">
+                        <option value="maternal">Maternal</option>
+                        <option value="stillborn">Stillborn</option>
+                        <option value="runt">Runt/Failure to thrive</option>
+                        <option value="other">Other</option>
+                    </select>
+                    
+                    <button class="confirm-btn" onclick="app.confirmMortality()">LOG MORTALITY</button>
+                </div>
+            </div>
+
+            <!-- Harvest Screen -->
+            <div class="screen" id="screen-harvest">
+                <h1 class="screen-title">Harvest to Processing</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon" style="background: rgba(0, 255, 136, 0.2);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="harvest-bin-title">Bin M1-042</h3>
+                            <p id="harvest-current">Ready to harvest: 12</p>
+                        </div>
+                    </div>
+                    
+                    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 8px;">Confirm Harvest Count</p>
+                    
+                    <div class="counter">
+                        <button class="counter-btn" onclick="app.adjustHarvest(-1)">−</button>
+                        <span class="counter-value" id="harvest-count">12</span>
+                        <button class="counter-btn" onclick="app.adjustHarvest(1)">+</button>
+                    </div>
+                    
+                    <button class="confirm-btn" onclick="app.confirmHarvest()">CONFIRM HARVEST</button>
+                </div>
+            </div>
+
+            <!-- Grade Batch Screen -->
+            <div class="screen" id="screen-grade">
+                <h1 class="screen-title">Grade Batch</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="grade-batch-title">Batch #2024-0142</h3>
+                            <p id="grade-batch-total">Total to grade: 48</p>
+                        </div>
+                    </div>
+                    
+                    <p style="color: var(--text-secondary); margin-bottom: 12px;">Tap +/− to allocate by size</p>
+                    
+                    <div class="sku-grid" id="sku-grid">
+                        <!-- Populated dynamically -->
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; margin-top: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
+                        <span>Remaining:</span>
+                        <span id="grade-remaining" style="color: var(--cyan); font-weight: 700;">48</span>
+                    </div>
+                    
+                    <button class="confirm-btn" id="grade-confirm-btn" onclick="app.confirmGrade()" disabled>CONFIRM GRADING</button>
+                </div>
+            </div>
+
+            <!-- Frozen Inventory Adjust Screen -->
+            <div class="screen" id="screen-frozen-adjust">
+                <h1 class="screen-title">Adjust Inventory</h1>
+                
+                <div class="action-panel">
+                    <div class="scanned-item">
+                        <div class="scanned-item-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                            </svg>
+                        </div>
+                        <div class="scanned-item-info">
+                            <h3 id="frozen-sku-title">Small Rats</h3>
+                            <p id="frozen-current">Current qty: 240</p>
+                        </div>
+                    </div>
+                    
+                    <div class="action-grid" style="margin-bottom: 20px;">
+                        <button class="action-btn" id="btn-pull" onclick="app.setAdjustMode('pull')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="17 1 21 5 17 9"></polyline>
+                                <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                            </svg>
+                            Pull
+                        </button>
+                        <button class="action-btn" id="btn-recount" onclick="app.setAdjustMode('recount')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                                <path d="M21 3v5h-5"></path>
+                            </svg>
+                            Recount
+                        </button>
+                    </div>
+                    
+                    <div id="adjust-counter-section" style="display: none;">
+                        <p style="text-align: center; color: var(--text-secondary); margin-bottom: 8px;" id="adjust-label">Pull Quantity</p>
+                        
+                        <div class="counter">
+                            <button class="counter-btn" onclick="app.adjustFrozen(-1)">−</button>
+                            <span class="counter-value" id="frozen-adjust-count">0</span>
+                            <button class="counter-btn" onclick="app.adjustFrozen(1)">+</button>
+                        </div>
+                        
+                        <button class="confirm-btn" onclick="app.confirmFrozenAdjust()">CONFIRM</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Screen -->
+            <div class="screen" id="screen-dashboard">
+                <h1 class="screen-title">Dashboard</h1>
+                
+                <div class="dashboard-grid">
+                    <div class="stat-card highlight">
+                        <div class="stat-label">Live Inventory</div>
+                        <div class="stat-value" id="stat-live">1,247</div>
+                    </div>
+                    <div class="stat-card highlight">
+                        <div class="stat-label">Frozen Stock</div>
+                        <div class="stat-value" id="stat-frozen">3,842</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Active Litters</div>
+                        <div class="stat-value" id="stat-litters">156</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Week</div>
+                        <div class="stat-value" id="stat-weekly">+892</div>
+                    </div>
+                </div>
+                
+                <div class="module-list">
+                    <div class="section-header">
+                        <span class="section-title">Modules</span>
+                    </div>
+                    <div id="module-list">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                
+                <div class="inventory-section">
+                    <div class="section-header">
+                        <span class="section-title">Frozen Inventory by SKU</span>
+                    </div>
+                    <div class="inventory-table" id="frozen-inventory-table">
+                        <div class="inventory-row header">
+                            <span class="inv-sku">SKU</span>
+                            <span class="inv-qty">Qty</span>
+                            <span class="inv-days">Days</span>
+                        </div>
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Screen -->
+            <div class="screen" id="screen-history">
+                <h1 class="screen-title">Activity Log</h1>
+                
+                <div id="activity-log">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" onclick="app.navigate('scan')" data-screen="scan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <span>Scan</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('dashboard')" data-screen="dashboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Dashboard</span>
+            </button>
+            <button class="nav-item" onclick="app.navigate('history')" data-screen="history">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script>
+        // Frostbite Feeders Inventory App
+        
+        // GROWTH SKUs - raised from litters, used in grading
+        const GROWTH_SKUS = [
+            { id: 'pinky', name: 'Pinky', weight: '1-13g', pct: 0.02 },
+            { id: 'fuzzy', name: 'Fuzzy', weight: '14-20g', pct: 0.15 },
+            { id: 'pup', name: 'Pup', weight: '20-30g', pct: 0.21 },
+            { id: 'weaned', name: 'Weaned', weight: '31-45g', pct: 0.15 },
+            { id: 'small', name: 'Small', weight: '46-80g', pct: 0.20 },
+            { id: 'smedium', name: 'Sm/Med', weight: '80-120g', pct: 0.15 },
+            { id: 'medium', name: 'Medium', weight: '120-175g', pct: 0.10 }
+        ];
+        
+        // BREEDER RETIREMENT SKUs - from colony retirement, NOT grading
+        // Males @ 3 months → Large | Females @ 6 months → Jumbo
+        const RETIREMENT_SKUS = [
+            { id: 'large', name: 'Large', weight: '175-300g', pct: 0.02, source: 'male_breeder' },
+            { id: 'jumbo', name: 'Jumbo', weight: '300g+', pct: 0.01, source: 'female_breeder' }
+        ];
+        
+        // All SKUs combined for display
+        const SKUS = [...GROWTH_SKUS, ...RETIREMENT_SKUS];
+
+        // FACILITY CONFIGURATION - 13 Racks, 900 Tubs, 4,666 rats/week
+        // Rack naming: {Purpose}{Number} - B=Breeding, G=Grow-Out, M=Maternity
+        // QR Format: FF-BIN-{Rack}-L{Level}-P{Position}
+        
+        const RACKS = [
+            // Row 1: Breeding (5 racks x 60 tubs = 300) - 1:7 male:female ratio
+            { id: 'B01', name: 'Breeding 1', row: 1, purpose: 'breeding', levels: 10, positions: 6, tubModel: 'FB70', status: 'active' },
+            { id: 'B02', name: 'Breeding 2', row: 1, purpose: 'breeding', levels: 10, positions: 6, tubModel: 'FB70', status: 'active' },
+            { id: 'B03', name: 'Breeding 3', row: 1, purpose: 'breeding', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            { id: 'B04', name: 'Breeding 4', row: 1, purpose: 'breeding', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            { id: 'B05', name: 'Breeding 5', row: 1, purpose: 'breeding', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            // Row 2: Grow-Out (4 racks x 60 tubs = 240) - ~50 rats/tub, small→medium sizing
+            { id: 'G01', name: 'Grow-Out 1', row: 2, purpose: 'growout', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            { id: 'G02', name: 'Grow-Out 2', row: 2, purpose: 'growout', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            { id: 'G03', name: 'Grow-Out 3', row: 2, purpose: 'growout', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            { id: 'G04', name: 'Grow-Out 4', row: 2, purpose: 'growout', levels: 10, positions: 6, tubModel: 'FB70', status: 'pending' },
+            // Row 3: Maternity (4 racks x 90 tubs = 360) - 2 moms/bin, vacation rotation
+            { id: 'M01', name: 'Maternity 1', row: 3, purpose: 'maternity', levels: 10, positions: 9, tubModel: 'FB40', status: 'pending' },
+            { id: 'M02', name: 'Maternity 2', row: 3, purpose: 'maternity', levels: 10, positions: 9, tubModel: 'FB40', status: 'pending' },
+            { id: 'M03', name: 'Maternity 3', row: 3, purpose: 'maternity', levels: 10, positions: 9, tubModel: 'FB40', status: 'pending' },
+            { id: 'M04', name: 'Maternity 4', row: 3, purpose: 'maternity', levels: 10, positions: 9, tubModel: 'FB40', status: 'pending' }
+        ];
+        
+        const FACILITY_STATS = {
+            totalRacks: 13,
+            totalTubs: 900,
+            weeklyCapacity: 4666,
+            rackHeight: '74"', // 6'2" - no ladder needed
+            rackLength: '120"', // 10 feet
+            rackDepth: '34"'
+        };
+        
+        // Legacy alias for backward compatibility
+        const MODULES = RACKS;
+
+        class FrostbiteApp {
+            constructor() {
+                this.currentScreen = 'scan';
+                this.scanner = null;
+                this.scannedItem = null;
+                this.currentCount = 0;
+                this.gradeAllocations = {};
+                this.batchTotal = 0;
+                this.adjustMode = null;
+                this.frozenCurrentQty = 0;
+                
+                // Initialize local storage data
+                this.data = this.loadData();
+                
+                this.init();
+            }
+
+            loadData() {
+                const stored = localStorage.getItem('frostbite_data');
+                if (stored) {
+                    return JSON.parse(stored);
+                }
+                return {
+                    bins: {},
+                    batches: [],
+                    frozenInventory: {},
+                    breeders: {},  // Breeder colony tracking
+                    breederRetirements: [],  // Retirement log
+                    activityLog: []
+                };
+            }
+
+            saveData() {
+                localStorage.setItem('frostbite_data', JSON.stringify(this.data));
+            }
+
+            init() {
+                this.initScanner();
+                this.renderDashboard();
+                this.renderHistory();
+            }
+
+            async initScanner() {
+                try {
+                    const video = document.getElementById('qr-video');
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'environment' }
+                    });
+                    video.srcObject = stream;
+
+                    this.scanner = new Html5Qrcode("qr-video", { verbose: false });
+                    
+                    const config = { fps: 10, qrbox: { width: 200, height: 200 } };
+                    
+                    await this.scanner.start(
+                        { facingMode: "environment" },
+                        config,
+                        (decodedText) => this.onScanSuccess(decodedText),
+                        () => {} // ignore errors
+                    );
+                } catch (err) {
+                    console.log('Camera access denied or unavailable:', err);
+                    // For demo purposes, allow manual entry
+                }
+            }
+
+            onScanSuccess(code) {
+                // Vibrate if available
+                if (navigator.vibrate) navigator.vibrate(50);
+                
+                // Parse QR code
+                // Formats:
+                //   FF-BIN-{Rack}-L{Level}-P{Position}  e.g., FF-BIN-B03-L5-P3
+                //   FF-BREEDER-{Rack}-{Sex}{Number}     e.g., FF-BREEDER-B01-F042
+                //   FF-BATCH-{Year}-{Number}            e.g., FF-BATCH-2024-0001
+                //   FF-FROZEN-{SKU}-{Location}          e.g., FF-FROZEN-small-LOC01
+                //   FF-GROWOUT-{Rack}-L{Level}-P{Pos}   e.g., FF-GROWOUT-G02-L3-P4
+                //   FF-MATERNITY-{Rack}-L{Level}-P{Pos} e.g., FF-MATERNITY-M01-L2-P5
+                
+                const parts = code.split('-');
+                if (parts[0] !== 'FF' || parts.length < 3) {
+                    this.showToast('Invalid QR code', 'error');
+                    return;
+                }
+
+                const type = parts[1];
+                const id = parts.slice(2).join('-');
+
+                this.scannedItem = { type, id, code };
+                this.showActionScreen();
+            }
+
+            showActionScreen() {
+                const { type, id } = this.scannedItem;
+                const grid = document.getElementById('action-grid');
+                const title = document.getElementById('scanned-title');
+                const subtitle = document.getElementById('scanned-subtitle');
+
+                grid.innerHTML = '';
+
+                if (type === 'BIN' || type === 'GROWOUT' || type === 'MATERNITY') {
+                    // Parse: {Rack}-L{Level}-P{Position} e.g., B03-L5-P3
+                    const binParts = id.split('-');
+                    const rackId = binParts[0];
+                    const level = binParts[1]?.replace('L', '') || '?';
+                    const position = binParts[2]?.replace('P', '') || '?';
+                    const rack = RACKS.find(r => r.id === rackId);
+                    
+                    const binData = this.data.bins[id] || { count: 0, status: 'empty' };
+                    const purposeLabel = rack?.purpose === 'breeding' ? 'Breeding' : 
+                                        rack?.purpose === 'growout' ? 'Grow-Out' :
+                                        rack?.purpose === 'maternity' ? 'Maternity' : 'Bin';
+                    
+                    title.textContent = `${purposeLabel} ${rackId}`;
+                    subtitle.textContent = binData.status === 'active' 
+                        ? `L${level} P${position} • ${binData.count} pups` 
+                        : `Level ${level}, Position ${position} • Empty`;
+
+                    // Different actions based on rack purpose
+                    if (rack?.purpose === 'maternity') {
+                        // Maternity bins: 2 moms/bin, vacation rotation
+                        if (binData.status !== 'active') {
+                            grid.innerHTML = `
+                                <button class="action-btn success" onclick="app.startMaternity()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                    Add Moms
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        } else {
+                            grid.innerHTML = `
+                                <button class="action-btn success" onclick="app.weanLitter()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Wean → Grow
+                                </button>
+                                <button class="action-btn" onclick="app.returnToBreeding()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="1 4 1 10 7 10"></polyline>
+                                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                                    </svg>
+                                    Mom → Breed
+                                </button>
+                                <button class="action-btn danger" onclick="app.showScreen('mortality')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Mortality
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        }
+                    } else if (rack?.purpose === 'growout') {
+                        // Grow-out bins: ~50 rats/tub, sizing to harvest
+                        if (binData.status !== 'active') {
+                            grid.innerHTML = `
+                                <button class="action-btn success" onclick="app.stockGrowout()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Stock Bin
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        } else {
+                            grid.innerHTML = `
+                                <button class="action-btn success" onclick="app.showScreen('harvest')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    Harvest
+                                </button>
+                                <button class="action-btn danger" onclick="app.showScreen('mortality')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Mortality
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        }
+                    } else {
+                        // Breeding bins (default): 1:7 male:female ratio
+                        if (binData.status !== 'active') {
+                            grid.innerHTML = `
+                                <button class="action-btn success" onclick="app.showScreen('new-litter')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    New Litter
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        } else {
+                            grid.innerHTML = `
+                                <button class="action-btn danger" onclick="app.showScreen('mortality')">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    Mortality
+                                </button>
+                                <button class="action-btn success" onclick="app.transferToMaternity()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        <polyline points="12 5 19 12 12 19"></polyline>
+                                    </svg>
+                                    → Maternity
+                                </button>
+                                <button class="action-btn" onclick="app.capturePhoto()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                        <circle cx="12" cy="13" r="4"></circle>
+                                    </svg>
+                                    Photo
+                                </button>
+                            `;
+                        }
+                    }
+                } else if (type === 'BATCH') {
+                    const batch = this.data.batches.find(b => b.id === id) || { total: 48, graded: false };
+                    title.textContent = `Batch #${id}`;
+                    subtitle.textContent = `Total: ${batch.total} • ${batch.graded ? 'Graded' : 'Pending grading'}`;
+
+                    grid.innerHTML = `
+                        <button class="action-btn" onclick="app.showScreen('grade')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            </svg>
+                            Grade Batch
+                        </button>
+                        <button class="action-btn" onclick="app.capturePhoto()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                            </svg>
+                            Photo
+                        </button>
+                    `;
+                    this.batchTotal = batch.total;
+                } else if (type === 'FROZEN') {
+                    const sku = SKUS.find(s => s.id === id);
+                    const qty = this.data.frozenInventory[id] || 0;
+                    title.textContent = sku ? `${sku.name} Rats` : id;
+                    subtitle.textContent = `Current qty: ${qty}`;
+                    this.frozenCurrentQty = qty;
+
+                    grid.innerHTML = `
+                        <button class="action-btn" onclick="app.showScreen('frozen-adjust')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="16"></line>
+                                <line x1="8" y1="12" x2="16" y2="12"></line>
+                            </svg>
+                            Adjust
+                        </button>
+                        <button class="action-btn" onclick="app.capturePhoto()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                <circle cx="12" cy="13" r="4"></circle>
+                            </svg>
+                            Photo
+                        </button>
+                    `;
+                } else if (type === 'BREEDER') {
+                    // Breeder QR format: FF-BREEDER-M1-F042 (F=female) or FF-BREEDER-M1-M012 (M=male)
+                    const parts = id.split('-');
+                    const moduleId = parts[0]; // M1
+                    const breederCode = parts[1]; // F042 or M012
+                    const sex = breederCode.charAt(0) === 'F' ? 'female' : 'male';
+                    const retirementSku = sex === 'female' ? 'jumbo' : 'large';
+                    const retirementAge = sex === 'female' ? '6 months' : '3 months';
+                    
+                    const breederData = this.data.breeders?.[id] || { 
+                        status: 'active', 
+                        sex: sex,
+                        litterCount: 0,
+                        pairDate: null
+                    };
+                    
+                    title.textContent = `Breeder ${breederCode}`;
+                    subtitle.textContent = `${sex.charAt(0).toUpperCase() + sex.slice(1)} • ${moduleId} • ${breederData.litterCount} litters`;
+                    
+                    // Store for retirement workflow
+                    this.currentBreeder = { id, sex, retirementSku, moduleId, breederCode };
+
+                    if (breederData.status === 'active') {
+                        grid.innerHTML = `
+                            <button class="action-btn danger" onclick="app.confirmRetireBreeder()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                                </svg>
+                                Retire → ${retirementSku.charAt(0).toUpperCase() + retirementSku.slice(1)}
+                            </button>
+                            <button class="action-btn" onclick="app.capturePhoto()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                    <circle cx="12" cy="13" r="4"></circle>
+                                </svg>
+                                Photo
+                            </button>
+                        `;
+                    } else {
+                        grid.innerHTML = `
+                            <div style="grid-column: span 2; text-align: center; padding: 20px; color: var(--text-secondary);">
+                                Breeder already retired
+                            </div>
+                        `;
+                    }
+                }
+
+                this.showScreen('action');
+            }
+
+            showScreen(screen) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById(`screen-${screen}`).classList.add('active');
+                this.currentScreen = screen;
+
+                // Initialize screen-specific data
+                if (screen === 'new-litter') {
+                    this.currentCount = 8;
+                    document.getElementById('litter-count').textContent = '8';
+                    document.getElementById('litter-bin-title').textContent = `Bin ${this.scannedItem.id}`;
+                } else if (screen === 'mortality') {
+                    const binData = this.data.bins[this.scannedItem.id] || { count: 0 };
+                    this.currentCount = 1;
+                    document.getElementById('mortality-count').textContent = '1';
+                    document.getElementById('mortality-bin-title').textContent = `Bin ${this.scannedItem.id}`;
+                    document.getElementById('mortality-current').textContent = `Current count: ${binData.count}`;
+                } else if (screen === 'harvest') {
+                    const binData = this.data.bins[this.scannedItem.id] || { count: 0 };
+                    this.currentCount = binData.count;
+                    document.getElementById('harvest-count').textContent = binData.count.toString();
+                    document.getElementById('harvest-bin-title').textContent = `Bin ${this.scannedItem.id}`;
+                    document.getElementById('harvest-current').textContent = `Ready to harvest: ${binData.count}`;
+                } else if (screen === 'grade') {
+                    this.initGradeScreen();
+                } else if (screen === 'frozen-adjust') {
+                    this.initFrozenAdjust();
+                }
+            }
+
+            navigate(screen) {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                document.querySelector(`[data-screen="${screen}"]`).classList.add('active');
+                this.showScreen(screen);
+                
+                if (screen === 'dashboard') {
+                    this.renderDashboard();
+                } else if (screen === 'history') {
+                    this.renderHistory();
+                }
+            }
+
+            adjustCount(delta) {
+                this.currentCount = Math.max(0, this.currentCount + delta);
+                document.getElementById('litter-count').textContent = this.currentCount.toString();
+            }
+
+            confirmNewLitter() {
+                const binId = this.scannedItem.id;
+                this.data.bins[binId] = {
+                    count: this.currentCount,
+                    status: 'active',
+                    birthDate: new Date().toISOString(),
+                    mortalityLog: []
+                };
+                
+                this.logActivity('new_litter', `New litter: ${this.currentCount} pups in Bin ${binId}`);
+                this.saveData();
+                this.showToast(`Litter logged: ${this.currentCount} pups`, 'success');
+                this.navigate('scan');
+            }
+
+            adjustMortality(delta) {
+                const binData = this.data.bins[this.scannedItem.id] || { count: 0 };
+                this.currentCount = Math.max(1, Math.min(binData.count, this.currentCount + delta));
+                document.getElementById('mortality-count').textContent = this.currentCount.toString();
+            }
+
+            confirmMortality() {
+                const binId = this.scannedItem.id;
+                const reason = document.getElementById('mortality-reason').value;
+                
+                if (!this.data.bins[binId]) {
+                    this.showToast('Bin not found', 'error');
+                    return;
+                }
+                
+                this.data.bins[binId].count -= this.currentCount;
+                this.data.bins[binId].mortalityLog.push({
+                    count: this.currentCount,
+                    reason,
+                    date: new Date().toISOString()
+                });
+                
+                if (this.data.bins[binId].count <= 0) {
+                    this.data.bins[binId].status = 'empty';
+                }
+                
+                this.logActivity('mortality', `Mortality: ${this.currentCount} in Bin ${binId} (${reason})`);
+                this.saveData();
+                this.showToast(`Logged ${this.currentCount} mortality`, 'success');
+                this.navigate('scan');
+            }
+
+            adjustHarvest(delta) {
+                const binData = this.data.bins[this.scannedItem.id] || { count: 0 };
+                this.currentCount = Math.max(0, Math.min(binData.count, this.currentCount + delta));
+                document.getElementById('harvest-count').textContent = this.currentCount.toString();
+            }
+
+            confirmHarvest() {
+                const binId = this.scannedItem.id;
+                const count = this.currentCount;
+                
+                // Generate batch ID
+                const batchId = `${new Date().getFullYear()}-${String(this.data.batches.length + 1).padStart(4, '0')}`;
+                
+                // Create batch
+                this.data.batches.push({
+                    id: batchId,
+                    sourceBin: binId,
+                    total: count,
+                    graded: false,
+                    harvestDate: new Date().toISOString()
+                });
+                
+                // Clear bin
+                this.data.bins[binId] = { count: 0, status: 'empty' };
+                
+                this.logActivity('harvest', `Harvested ${count} from Bin ${binId} → Batch #${batchId}`);
+                this.saveData();
+                this.showToast(`Batch #${batchId} created`, 'success');
+                this.navigate('scan');
+            }
+
+            initGradeScreen() {
+                document.getElementById('grade-batch-title').textContent = `Batch #${this.scannedItem.id}`;
+                document.getElementById('grade-batch-total').textContent = `Total to grade: ${this.batchTotal}`;
+                
+                // Only use GROWTH_SKUS for grading (Large/Jumbo come from breeder retirement)
+                this.gradeAllocations = {};
+                GROWTH_SKUS.forEach(sku => this.gradeAllocations[sku.id] = 0);
+                
+                this.renderSkuGrid();
+                this.updateGradeRemaining();
+            }
+
+            renderSkuGrid() {
+                const grid = document.getElementById('sku-grid');
+                // Only show growth SKUs - Large/Jumbo come from breeder retirement, not grading
+                grid.innerHTML = GROWTH_SKUS.map(sku => `
+                    <div class="sku-item" data-sku="${sku.id}">
+                        <div class="sku-name">${sku.name}</div>
+                        <div class="sku-count" id="sku-count-${sku.id}">${this.gradeAllocations[sku.id]}</div>
+                        <div class="sku-counter">
+                            <button class="sku-counter-btn" onclick="app.adjustSku('${sku.id}', -1)">−</button>
+                            <button class="sku-counter-btn" onclick="app.adjustSku('${sku.id}', 1)">+</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            adjustSku(skuId, delta) {
+                const remaining = this.getGradeRemaining();
+                const current = this.gradeAllocations[skuId];
+                
+                if (delta > 0 && remaining <= 0) return;
+                if (delta < 0 && current <= 0) return;
+                
+                this.gradeAllocations[skuId] = current + delta;
+                document.getElementById(`sku-count-${skuId}`).textContent = this.gradeAllocations[skuId];
+                this.updateGradeRemaining();
+            }
+
+            getGradeRemaining() {
+                const allocated = Object.values(this.gradeAllocations).reduce((a, b) => a + b, 0);
+                return this.batchTotal - allocated;
+            }
+
+            updateGradeRemaining() {
+                const remaining = this.getGradeRemaining();
+                document.getElementById('grade-remaining').textContent = remaining;
+                document.getElementById('grade-confirm-btn').disabled = remaining !== 0;
+            }
+
+            confirmGrade() {
+                const batchId = this.scannedItem.id;
+                const batch = this.data.batches.find(b => b.id === batchId);
+                
+                if (batch) {
+                    batch.graded = true;
+                    batch.allocations = { ...this.gradeAllocations };
+                }
+                
+                // Add to frozen inventory
+                Object.entries(this.gradeAllocations).forEach(([sku, count]) => {
+                    this.data.frozenInventory[sku] = (this.data.frozenInventory[sku] || 0) + count;
+                });
+                
+                const breakdown = Object.entries(this.gradeAllocations)
+                    .filter(([_, count]) => count > 0)
+                    .map(([sku, count]) => `${SKUS.find(s => s.id === sku)?.name}: ${count}`)
+                    .join(', ');
+                
+                this.logActivity('grade', `Graded Batch #${batchId}: ${breakdown}`);
+                this.saveData();
+                this.showToast('Batch graded successfully', 'success');
+                this.navigate('scan');
+            }
+
+            initFrozenAdjust() {
+                const sku = SKUS.find(s => s.id === this.scannedItem.id);
+                document.getElementById('frozen-sku-title').textContent = sku ? `${sku.name} Rats` : this.scannedItem.id;
+                document.getElementById('frozen-current').textContent = `Current qty: ${this.frozenCurrentQty}`;
+                document.getElementById('adjust-counter-section').style.display = 'none';
+                this.adjustMode = null;
+                this.currentCount = 0;
+                
+                document.getElementById('btn-pull').classList.remove('active');
+                document.getElementById('btn-recount').classList.remove('active');
+            }
+
+            setAdjustMode(mode) {
+                this.adjustMode = mode;
+                this.currentCount = mode === 'recount' ? this.frozenCurrentQty : 0;
+                document.getElementById('frozen-adjust-count').textContent = this.currentCount.toString();
+                document.getElementById('adjust-label').textContent = mode === 'pull' ? 'Pull Quantity' : 'New Count';
+                document.getElementById('adjust-counter-section').style.display = 'block';
+                
+                document.getElementById('btn-pull').style.borderColor = mode === 'pull' ? 'var(--cyan)' : '#333';
+                document.getElementById('btn-recount').style.borderColor = mode === 'recount' ? 'var(--cyan)' : '#333';
+            }
+
+            adjustFrozen(delta) {
+                if (this.adjustMode === 'pull') {
+                    this.currentCount = Math.max(0, Math.min(this.frozenCurrentQty, this.currentCount + delta));
+                } else {
+                    this.currentCount = Math.max(0, this.currentCount + delta);
+                }
+                document.getElementById('frozen-adjust-count').textContent = this.currentCount.toString();
+            }
+
+            confirmFrozenAdjust() {
+                const skuId = this.scannedItem.id;
+                const sku = SKUS.find(s => s.id === skuId);
+                
+                if (this.adjustMode === 'pull') {
+                    this.data.frozenInventory[skuId] = this.frozenCurrentQty - this.currentCount;
+                    this.logActivity('pull', `Pulled ${this.currentCount} ${sku?.name || skuId} from frozen`);
+                } else {
+                    const diff = this.currentCount - this.frozenCurrentQty;
+                    this.data.frozenInventory[skuId] = this.currentCount;
+                    this.logActivity('recount', `Recount ${sku?.name || skuId}: ${this.frozenCurrentQty} → ${this.currentCount} (${diff >= 0 ? '+' : ''}${diff})`);
+                }
+                
+                this.saveData();
+                this.showToast('Inventory updated', 'success');
+                this.navigate('scan');
+            }
+
+            confirmRetireBreeder() {
+                const { id, sex, retirementSku, moduleId, breederCode } = this.currentBreeder;
+                
+                // Update breeder status
+                if (!this.data.breeders) this.data.breeders = {};
+                this.data.breeders[id] = {
+                    ...(this.data.breeders[id] || {}),
+                    status: 'retired',
+                    retiredAt: new Date().toISOString()
+                };
+                
+                // Add to retirement log
+                if (!this.data.breederRetirements) this.data.breederRetirements = [];
+                this.data.breederRetirements.push({
+                    breederId: id,
+                    sex,
+                    sku: retirementSku,
+                    date: new Date().toISOString()
+                });
+                
+                // Add to frozen inventory (Large or Jumbo based on sex)
+                this.data.frozenInventory[retirementSku] = (this.data.frozenInventory[retirementSku] || 0) + 1;
+                
+                const skuName = retirementSku.charAt(0).toUpperCase() + retirementSku.slice(1);
+                this.logActivity('breeder_retirement', `Retired ${sex} breeder ${breederCode} → ${skuName}`);
+                this.saveData();
+                this.showToast(`Breeder retired → ${skuName}`, 'success');
+                this.navigate('scan');
+            }
+
+            // LIFECYCLE WORKFLOW METHODS
+            
+            // Maternity: Add nursing moms to bin (2 moms/bin standard)
+            startMaternity() {
+                const binId = this.scannedItem.id;
+                this.data.bins[binId] = {
+                    count: 2, // 2 moms per bin
+                    status: 'active',
+                    type: 'maternity',
+                    startDate: new Date().toISOString()
+                };
+                this.logActivity('maternity_start', `Maternity started: ${binId} (2 moms)`);
+                this.saveData();
+                this.showToast('Maternity bin started', 'success');
+                this.navigate('scan');
+            }
+            
+            // Wean litter and move pups to grow-out
+            weanLitter() {
+                // This would prompt for count and destination grow-out bin
+                this.showToast('Scan grow-out bin to transfer', 'info');
+                // In full implementation: set pending transfer, next scan completes it
+            }
+            
+            // Return mom from maternity/vacation back to breeding
+            returnToBreeding() {
+                const binId = this.scannedItem.id;
+                this.data.bins[binId] = { count: 0, status: 'empty' };
+                this.logActivity('mom_return', `Mom returned to breeding from ${binId}`);
+                this.saveData();
+                this.showToast('Mom returned to breeding', 'success');
+                this.navigate('scan');
+            }
+            
+            // Stock grow-out bin with weaned pups
+            stockGrowout() {
+                this.currentCount = 50; // Default ~50 rats/tub
+                document.getElementById('litter-count').textContent = '50';
+                document.getElementById('litter-bin-title').textContent = `Grow-Out ${this.scannedItem.id}`;
+                this.showScreen('new-litter'); // Reuse litter screen for count entry
+            }
+            
+            // Transfer from breeding to maternity
+            transferToMaternity() {
+                const binId = this.scannedItem.id;
+                const binData = this.data.bins[binId];
+                this.logActivity('transfer_maternity', `Transfer from ${binId} to maternity (${binData?.count || 0} pups)`);
+                // Mark source empty, user scans maternity bin next
+                this.data.bins[binId] = { count: 0, status: 'empty' };
+                this.saveData();
+                this.showToast('Scan maternity bin to complete', 'info');
+                this.navigate('scan');
+            }
+
+            capturePhoto() {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.capture = 'environment';
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                        // Store photo reference
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const photoData = {
+                                itemCode: this.scannedItem?.code || 'unknown',
+                                timestamp: new Date().toISOString(),
+                                data: reader.result
+                            };
+                            
+                            // Store in localStorage (limited, but works for demo)
+                            const photos = JSON.parse(localStorage.getItem('frostbite_photos') || '[]');
+                            photos.push(photoData);
+                            localStorage.setItem('frostbite_photos', JSON.stringify(photos.slice(-50))); // Keep last 50
+                            
+                            this.showToast('Photo saved', 'success');
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+                input.click();
+            }
+
+            renderDashboard() {
+                // Calculate stats by purpose
+                let breedingCount = 0, growoutCount = 0, maternityCount = 0;
+                let activeBreeders = 0, activeGrowout = 0, activeMaternity = 0;
+                
+                Object.entries(this.data.bins).forEach(([binId, bin]) => {
+                    if (bin.status !== 'active') return;
+                    const rackId = binId.split('-')[0];
+                    const rack = RACKS.find(r => r.id === rackId);
+                    
+                    if (rack?.purpose === 'breeding') {
+                        breedingCount += bin.count;
+                        activeBreeders++;
+                    } else if (rack?.purpose === 'growout') {
+                        growoutCount += bin.count;
+                        activeGrowout++;
+                    } else if (rack?.purpose === 'maternity') {
+                        maternityCount += bin.count;
+                        activeMaternity++;
+                    }
+                });
+                
+                const liveTotal = breedingCount + growoutCount + maternityCount;
+                const frozenTotal = Object.values(this.data.frozenInventory).reduce((a, b) => a + b, 0);
+                
+                // Weekly (last 7 days activity)
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const weeklyHarvest = this.data.activityLog
+                    .filter(a => new Date(a.date) > weekAgo && (a.type === 'harvest' || a.type === 'grade'))
+                    .length;
+                
+                document.getElementById('stat-live').textContent = liveTotal.toLocaleString();
+                document.getElementById('stat-frozen').textContent = frozenTotal.toLocaleString();
+                document.getElementById('stat-litters').textContent = (activeBreeders + activeMaternity).toString();
+                document.getElementById('stat-weekly').textContent = `+${weeklyHarvest}`;
+                
+                // Render racks by row
+                const moduleList = document.getElementById('module-list');
+                
+                const rowGroups = {
+                    1: { name: 'Row 1: Breeding', racks: RACKS.filter(r => r.row === 1), color: 'var(--cyan)' },
+                    2: { name: 'Row 2: Grow-Out', racks: RACKS.filter(r => r.row === 2), color: 'var(--success)' },
+                    3: { name: 'Row 3: Maternity', racks: RACKS.filter(r => r.row === 3), color: 'var(--warning)' }
+                };
+                
+                moduleList.innerHTML = Object.values(rowGroups).map(row => `
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: ${row.color}; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">${row.name}</div>
+                        ${row.racks.map(r => {
+                            const activeBins = Object.entries(this.data.bins)
+                                .filter(([id, b]) => id.startsWith(r.id) && b.status === 'active').length;
+                            const totalBins = r.levels * r.positions;
+                            return `
+                                <div class="module-item" style="border-left: 3px solid ${row.color};">
+                                    <div class="module-info">
+                                        <h4>${r.id} - ${r.name}</h4>
+                                        <p>${activeBins}/${totalBins} bins active • ${r.tubModel}</p>
+                                    </div>
+                                    <span class="module-status ${r.status}">${r.status === 'active' ? 'Active' : 'Pending'}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `).join('');
+                
+                // Render frozen inventory
+                const table = document.getElementById('frozen-inventory-table');
+                const headerRow = table.querySelector('.header');
+                table.innerHTML = '';
+                table.appendChild(headerRow);
+                
+                // Calculate days of supply based on 4,666/week capacity
+                const weeklyDemand = {};
+                SKUS.forEach(sku => weeklyDemand[sku.id] = Math.round(4666 * sku.pct));
+                
+                SKUS.forEach(sku => {
+                    const qty = this.data.frozenInventory[sku.id] || 0;
+                    const demand = weeklyDemand[sku.id] || 1;
+                    const days = Math.round((qty / demand) * 7);
+                    const daysClass = days < 7 ? 'low' : (days > 21 ? 'ok' : '');
+                    const sourceTag = sku.source ? ' ⚡' : ''; // Mark breeder retirement SKUs
+                    
+                    const row = document.createElement('div');
+                    row.className = 'inventory-row';
+                    row.innerHTML = `
+                        <span class="inv-sku">${sku.name}${sourceTag}</span>
+                        <span class="inv-qty">${qty.toLocaleString()}</span>
+                        <span class="inv-days ${daysClass}">${days}d</span>
+                    `;
+                    table.appendChild(row);
+                });
+            }
+
+            renderHistory() {
+                const log = document.getElementById('activity-log');
+                const activities = this.data.activityLog.slice(-50).reverse();
+                
+                log.innerHTML = activities.length ? activities.map(a => {
+                    const date = new Date(a.date);
+                    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    
+                    return `
+                        <div class="module-item">
+                            <div class="module-info">
+                                <h4>${a.message}</h4>
+                                <p>${dateStr} at ${timeStr}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('') : '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No activity yet</p>';
+            }
+
+            logActivity(type, message) {
+                this.data.activityLog.push({
+                    type,
+                    message,
+                    date: new Date().toISOString()
+                });
+            }
+
+            showToast(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                toast.innerHTML = `
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--cyan)'}" stroke-width="2">
+                        ${type === 'success' 
+                            ? '<polyline points="20 6 9 17 4 12"></polyline>' 
+                            : type === 'error' 
+                                ? '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>'
+                                : '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line>'}
+                    </svg>
+                    <span>${message}</span>
+                `;
+                container.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.animation = 'slideUp 0.3s ease reverse';
+                    setTimeout(() => toast.remove(), 300);
+                }, 2500);
+            }
+
+            showSettings() {
+                this.showToast('Settings coming soon', 'info');
+            }
+
+            // Demo mode - simulate QR scan
+            simulateScan(code) {
+                this.onScanSuccess(code);
+            }
+        }
+
+        // Initialize app
+        const app = new FrostbiteApp();
+
+        // For demo/testing - expose simulate function
+        window.demo = {
+            // Breeding bins (Row 1)
+            scanBreedingBin: (rack = 'B01', level = 5, pos = 3) => app.simulateScan(`FF-BIN-${rack}-L${level}-P${pos}`),
+            // Grow-out bins (Row 2)
+            scanGrowoutBin: (rack = 'G01', level = 3, pos = 2) => app.simulateScan(`FF-BIN-${rack}-L${level}-P${pos}`),
+            // Maternity bins (Row 3)
+            scanMaternityBin: (rack = 'M01', level = 2, pos = 5) => app.simulateScan(`FF-BIN-${rack}-L${level}-P${pos}`),
+            // Breeders
+            scanBreeder: (rack = 'B01', sex = 'F', num = '042') => app.simulateScan(`FF-BREEDER-${rack}-${sex}${num}`),
+            // Batches and frozen
+            scanBatch: (id = '2024-0001') => app.simulateScan(`FF-BATCH-${id}`),
+            scanFrozen: (sku = 'small') => app.simulateScan(`FF-FROZEN-${sku}`),
+            
+            addTestData: () => {
+                // Breeding bins (Row 1: B01-B05)
+                app.data.bins['B01-L3-P2'] = { count: 12, status: 'active', birthDate: new Date().toISOString(), mortalityLog: [] };
+                app.data.bins['B01-L5-P4'] = { count: 8, status: 'active', birthDate: new Date().toISOString(), mortalityLog: [] };
+                app.data.bins['B02-L2-P1'] = { count: 10, status: 'active', birthDate: new Date().toISOString(), mortalityLog: [] };
+                
+                // Grow-out bins (Row 2: G01-G04)
+                app.data.bins['G01-L4-P3'] = { count: 48, status: 'active', type: 'growout' };
+                
+                // Maternity bins (Row 3: M01-M04)
+                app.data.bins['M01-L2-P5'] = { count: 2, status: 'active', type: 'maternity' };
+                
+                // Frozen inventory (Growth SKUs from grading + Retirement SKUs from breeders)
+                app.data.frozenInventory = { 
+                    pinky: 45, fuzzy: 320, pup: 480, weaned: 290, 
+                    small: 410, smedium: 285, medium: 180,
+                    large: 12, jumbo: 8 
+                };
+                
+                app.data.batches = [{ id: '2024-0001', sourceBin: 'G01-L4-P3', total: 48, graded: false }];
+                
+                // Breeder colony
+                app.data.breeders = {
+                    'B01-F001': { status: 'active', sex: 'female', litterCount: 4 },
+                    'B01-F002': { status: 'active', sex: 'female', litterCount: 3 },
+                    'B01-M001': { status: 'active', sex: 'male', litterCount: 0 }
+                };
+                
+                app.saveData();
+                app.renderDashboard();
+                console.log('Test data added for 13-rack facility.');
+                console.log('');
+                console.log('Try these commands:');
+                console.log('  demo.scanBreedingBin("B01", 3, 2)  - Active breeding bin');
+                console.log('  demo.scanGrowoutBin("G01", 4, 3)   - Grow-out bin with 48 rats');
+                console.log('  demo.scanMaternityBin("M01", 2, 5) - Maternity bin');
+                console.log('  demo.scanBreeder("B01", "F", "001") - Female breeder');
+                console.log('  demo.scanBatch("2024-0001")        - Batch for grading');
+            },
+            
+            showFacility: () => {
+                console.log('=== FROSTBITE FACILITY ===');
+                console.log('');
+                console.log('Row 1: BREEDING (5 racks × 60 tubs = 300)');
+                console.log('  B01, B02, B03, B04, B05 - FB70 tubs, 10 levels × 6 positions');
+                console.log('');
+                console.log('Row 2: GROW-OUT (4 racks × 60 tubs = 240)');
+                console.log('  G01, G02, G03, G04 - FB70 tubs, 10 levels × 6 positions');
+                console.log('');
+                console.log('Row 3: MATERNITY (4 racks × 90 tubs = 360)');
+                console.log('  M01, M02, M03, M04 - FB40 tubs, 10 levels × 9 positions');
+                console.log('');
+                console.log('TOTAL: 13 racks, 900 tubs, 4,666 rats/week capacity');
+            }
+        };
+
+        console.log('Frostbite Feeders Inventory App loaded.');
+        console.log('Run demo.addTestData() then demo.showFacility() for facility map.');
+    </script>
+</body>
+</html>
