@@ -15,5 +15,5 @@ Notes:
 
 - The dashboard preserves the Frostbite Flow cockpit direction from the reference: dark left rail, metric strip, bin map, alerts, and right-side bin detail panel.
 - The mobile layout starts with search/actions/metrics and keeps the navigation rail below the working flow.
-- Shopify mapping is visible but read-only.
+- Shopify mapping is no longer exposed as an operator workflow; Shopify remains a read-only background signal.
 - Browser QA confirmed no console errors, live state load, QR lookup, mobile hash lookup, and save-flow dry-run interception with exactly one bin changed.

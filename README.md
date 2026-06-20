@@ -29,6 +29,8 @@ Recovered files:
 
 ## Baseline Inventory
 
+The recovery baseline is the June 18, 2026 CSV snapshot recovered during repo restoration. It is the comparison point for "Changed" counts and reports, not a daily operator button.
+
 `data/exports/frostbite-inventory-2026-06-18.csv` contains 714 rows:
 
 | Room | Rows |
@@ -52,7 +54,7 @@ Important columns include `Bin`, `Room`, `Rack`, `Type`, `Status`, `SKU`, `Mothe
 
 The React/Vite frontend is the Day 1 operator cockpit for visually working with the recovered baseline. It starts from `data/exports/frostbite-inventory-2026-06-18.csv`, then reads the shared Flow state through the Vite proxy at `/api/flow/state`.
 
-The dashboard can save bin status/SKU/date/count/note edits back to Flow shared state through `/api/flow/state`. Shopify mapping is displayed read-only and the dashboard does not write to Shopify.
+The dashboard can save bin status/SKU/date/count/note edits back to Flow shared state through `/api/flow/state`. Shopify stays read-only behind the scenes; the operator UI does not expose Shopify as a workflow.
 
 ```powershell
 npm install
@@ -70,6 +72,11 @@ npm run verify
 ```
 
 The browser QA verifies the app title, metrics, live shared state (`714` bins), QR lookup, mobile hash lookup, and screenshots. It also clicks through a save flow but intercepts the `PUT /api/flow/state` locally so test runs do not mutate live inventory.
+
+Current operator exports:
+
+- Daily Report: Markdown report with current inventory by SKU and changed rows.
+- OKF Bundle: JSON bundle for agents/company context graph storage.
 
 ## Do Not Lose Again
 

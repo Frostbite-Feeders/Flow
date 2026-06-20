@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
 
@@ -121,9 +121,14 @@ async function main() {
   const title = await desktop.title();
   const heading = await desktop.locator('h1').first().textContent();
   const metrics = await desktop.locator('.metric-strip').innerText();
-  await desktop.click('button:has-text("Quick Scan")');
+  await desktop.click('button:has-text("Scan Bin")');
   await desktop.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
   const scanModeText = await desktop.locator('section[aria-label="Scan Mode"]').innerText();
+  const okfDownloadPromise = desktop.waitForEvent('download');
+  await desktop.click('[data-testid="okf-export-action"]');
+  const okfDownload = await okfDownloadPromise;
+  const okfPath = await okfDownload.path();
+  const okfBundle = JSON.parse(readFileSync(okfPath, 'utf8'));
 
   await desktop.fill(searchInput, 'Pup target');
   await desktop.waitForTimeout(300);
@@ -146,6 +151,8 @@ async function main() {
 
   const selectedBin = await desktop.locator('.detail-title h2').textContent();
   const qrTarget = await desktop.locator('.qr-card code').textContent();
+  const binMapText = await desktop.locator('[data-testid="bin-map"]').innerText();
+  const visibleShopifyUi = await desktop.locator('text=Shopify View').count() + await desktop.locator('text=Shopify Mapping').count();
   const desktopScreenshot = path.join(outDir, 'flow-desktop.png');
   await desktop.screenshot({ path: desktopScreenshot, fullPage: true });
 
@@ -159,7 +166,7 @@ async function main() {
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
   await mobile.route('**/*', allowLocalReadAndDryRunWrite);
   await mobile.goto('http://127.0.0.1:5173/#10-1-01', { waitUntil: 'networkidle' });
-  await mobile.click('button:has-text("Quick Scan")');
+  await mobile.click('button:has-text("Scan Bin")');
   await mobile.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
   const mobileScanModeText = await mobile.locator('section[aria-label="Scan Mode"]').innerText();
   await mobile.fill(searchInput, '10-1-01');
@@ -189,6 +196,14 @@ async function main() {
     scanModeText,
     mobileScanModeText,
     writePreview,
+    binMapText,
+    visibleShopifyUi,
+    okfFilename: okfDownload.suggestedFilename(),
+    okfBundleType: okfBundle.bundle_type,
+    okfGraphNodes: okfBundle.graph?.nodes?.length || 0,
+    okfGraphEdges: okfBundle.graph?.edges?.length || 0,
+    okfInventorySkuCount: okfBundle.inventory_by_sku?.length || 0,
+    okfPerBinCount: okfBundle.per_bin_inventory?.length || 0,
     stateId: stateJson.id,
     stateBinCount: Object.keys(stateJson.payload?.bins || {}).length,
     dryRunWriteCount: interceptedWrites.length,
@@ -215,13 +230,45 @@ async function main() {
     throw new Error(`Expected 714 live bins, got ${result.stateBinCount}`);
   }
   if (!scanModeText.includes('Scan Mode') || !scanModeText.includes('Current bin')) {
-    throw new Error(`Quick Scan tray did not render expected text: ${scanModeText}`);
+    throw new Error(`Scan Bin tray did not render expected text: ${scanModeText}`);
   }
   if (!mobileScanModeText.includes('Scan Mode') || !mobileScanModeText.includes('Current bin')) {
-    throw new Error(`Mobile Quick Scan tray did not render expected text: ${mobileScanModeText}`);
+    throw new Error(`Mobile Scan Bin tray did not render expected text: ${mobileScanModeText}`);
   }
   if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note')) {
     throw new Error(`Save preview did not show the changed note: ${writePreview}`);
+  }
+  if (visibleShopifyUi > 0) {
+    throw new Error('Visible Shopify workflow copy should not be present in the operator UI');
+  }
+  if (binMapText.includes('No bins match this filter.')) {
+    throw new Error('Bin map should remain visible after bin search; got empty filter state');
+  }
+  for (const legendLabel of ['Action needed', 'Due soon', 'In use', 'Ready']) {
+    if (!binMapText.includes(legendLabel)) {
+      throw new Error(`Bin activity legend is missing ${legendLabel}`);
+    }
+  }
+  if (okfBundle.bundle_type !== 'frostbite-flow-operations-snapshot') {
+    throw new Error(`Unexpected OKF bundle type: ${okfBundle.bundle_type}`);
+  }
+  if ((okfBundle.per_bin_inventory?.length || 0) !== 714) {
+    throw new Error(`OKF per-bin inventory expected 714 rows, got ${okfBundle.per_bin_inventory?.length}`);
+  }
+  if ((okfBundle.graph?.nodes?.length || 0) < 714 || (okfBundle.graph?.edges?.length || 0) < 714) {
+    throw new Error('OKF graph is missing expected room/rack/bin/SKU nodes or edges');
+  }
+  const nodeIds = okfBundle.graph.nodes.map((node) => node.id);
+  const uniqueNodeIds = new Set(nodeIds);
+  if (uniqueNodeIds.size !== nodeIds.length) {
+    throw new Error(`OKF graph has duplicate node IDs: ${nodeIds.length - uniqueNodeIds.size}`);
+  }
+  const brokenEdges = okfBundle.graph.edges.filter((edge) => !uniqueNodeIds.has(edge.from) || !uniqueNodeIds.has(edge.to));
+  if (brokenEdges.length > 0) {
+    throw new Error(`OKF graph has ${brokenEdges.length} broken edge reference(s)`);
+  }
+  if (!okfBundle.agent_interface?.invariant?.includes('Shopify remains read-only')) {
+    throw new Error('OKF bundle is missing the Shopify read-only invariant');
   }
   if (interceptedWrites.length !== 2) {
     throw new Error(`Expected two dry-run save writes, got ${interceptedWrites.length}`);

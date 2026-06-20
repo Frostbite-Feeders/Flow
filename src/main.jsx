@@ -9,7 +9,6 @@ import {
   ClipboardList,
   Download,
   FileText,
-  Filter,
   LayoutDashboard,
   Loader2,
   MapPinned,
@@ -17,8 +16,6 @@ import {
   QrCode,
   ScanLine,
   Search,
-  Settings,
-  ShieldCheck,
   Snowflake,
   Sparkles,
   Wifi,
@@ -30,6 +27,12 @@ import './styles.css';
 const TODAY = '2026-06-20';
 const FLOW_API_BASE = '/api/flow';
 const TENANT_ID = 'frostbite';
+const RECOVERY_BASELINE = {
+  label: 'June 18 recovered inventory CSV',
+  date: '2026-06-18',
+  rows: 714,
+  sha256: '420C32AEDE4E14B78EB8F45A16E5157C7C6E06D21997623DE4D80BAE4FB1D4A1',
+};
 const ROOMS = ['all', 'breeding', 'nursery', 'growout'];
 const STATUS_ORDER = ['breeding', 'nursery', 'growout', 'open'];
 const SKU_OPTIONS = ['No SKU', 'Pinky', 'Fuzzy', 'Pup', 'Weaned', 'Small', 'Smedium', 'Medium', 'Large', 'Jumbo'];
@@ -185,14 +188,6 @@ function formatDate(date) {
   return `${date} - ${delta}d`;
 }
 
-function parseVariants(value) {
-  if (!value) return [];
-  return value.split('|').map((entry) => {
-    const [sku, variantId] = entry.split(':');
-    return { sku, variantId };
-  });
-}
-
 function classNames(...parts) {
   return parts.filter(Boolean).join(' ');
 }
@@ -309,6 +304,64 @@ function getDraftChanges(row, draft) {
     .map(([label, before, after]) => ({ label, before: before || 'blank', after: after || 'blank' }));
 }
 
+function getRowActivity(row) {
+  const due = daysUntil(row.dueDate);
+  if (due !== null && due < 0) return { key: 'needs-action', label: 'Action needed' };
+  if (due !== null && due <= 7) return { key: 'due-soon', label: 'Due soon' };
+  if (row.status !== 'open') return { key: 'in-use', label: 'In use' };
+  return { key: 'ready', label: 'Ready' };
+}
+
+function buildSkuInventory(rows) {
+  const bySku = rows.reduce((acc, row) => {
+    const sku = row.sku || 'No SKU';
+    acc[sku] = acc[sku] || {
+      sku,
+      bins: 0,
+      activeBins: 0,
+      openBins: 0,
+      dueSoon: 0,
+      overdue: 0,
+      estimatedAnimals: 0,
+      freezerOnHand: 0,
+    };
+    acc[sku].bins += 1;
+    if (row.status === 'open') acc[sku].openBins += 1;
+    if (row.status !== 'open') acc[sku].activeBins += 1;
+    if (daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) >= 0 && daysUntil(row.dueDate) <= 7) acc[sku].dueSoon += 1;
+    if (daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) < 0) acc[sku].overdue += 1;
+    acc[sku].estimatedAnimals += toNumber(row.ratsPerLitter);
+    acc[sku].freezerOnHand += toNumber(row.freezerOnHand);
+    return acc;
+  }, {});
+
+  return Object.values(bySku).sort((a, b) => a.sku.localeCompare(b.sku));
+}
+
+function getChangedRows(rows) {
+  const baselineByBin = new Map(baselineRows.map((row) => [row.bin, row]));
+  return rows
+    .map((row) => {
+      const baseline = baselineByBin.get(row.bin);
+      if (!baseline) return null;
+      const changes = [
+        ['status', baseline.status, row.status],
+        ['sku', baseline.sku, row.sku],
+        ['dueDate', baseline.dueDate || '', row.dueDate || ''],
+        ['birthDate', baseline.birthDate || '', row.birthDate || ''],
+        ['mothers', String(baseline.mothers ?? 0), String(row.mothers ?? 0)],
+        ['ratsPerLitter', String(baseline.ratsPerLitter ?? 0), String(row.ratsPerLitter ?? 0)],
+        ['note', baseline.note || '', row.note || ''],
+        ['updatedAt', baseline.updatedAt || '', row.updatedAt || ''],
+      ]
+        .filter(([, before, after]) => String(before) !== String(after))
+        .map(([field, before, after]) => ({ field, before, after }));
+      return changes.length ? { bin: row.bin, room: row.room, rack: row.rack, activity: getRowActivity(row).key, changes } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.bin.localeCompare(b.bin, undefined, { numeric: true }));
+}
+
 async function flowApi(path, options = {}) {
   const response = await fetch(`${FLOW_API_BASE}${path}`, {
     ...options,
@@ -387,7 +440,6 @@ function App() {
       const due = daysUntil(row.dueDate);
       return due !== null && due < 0;
     });
-    const mappedRows = rows.filter((row) => row.shopifyVariantIds);
     const activeRows = rows.filter((row) => row.status !== 'open');
     const staleRows = rows.filter((row) => {
       if (!row.updatedAt) return true;
@@ -395,7 +447,7 @@ function App() {
       const today = new Date(`${TODAY}T00:00:00`);
       return (today - updated) / 86400000 > 2;
     });
-    return { roomCounts, statusCounts, dueSoon, overdue, mappedRows, activeRows, staleRows };
+    return { roomCounts, statusCounts, dueSoon, overdue, activeRows, staleRows };
   }, [rows]);
 
   const racks = useMemo(() => {
@@ -425,6 +477,15 @@ function App() {
       ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
     });
   }, [activeRack, activeRoom, activeStatus, query, rows]);
+
+  const mapRows = useMemo(() => {
+    return rows.filter((row) => {
+      if (activeRoom !== 'all' && row.room !== activeRoom) return false;
+      if (activeRack !== 'all' && row.rack !== activeRack) return false;
+      if (activeStatus !== 'all' && row.status !== activeStatus) return false;
+      return true;
+    });
+  }, [activeRack, activeRoom, activeStatus, rows]);
 
   const selected = useMemo(() => {
     const visibleMatch = filteredRows.find((row) => row.bin === selectedBin);
@@ -458,12 +519,12 @@ function App() {
   }, [draftDirty, selected?.bin, selected?.updatedAt]);
 
   const rackGroups = useMemo(() => {
-    return filteredRows.reduce((acc, row) => {
+    return mapRows.reduce((acc, row) => {
       acc[row.rack] = acc[row.rack] || [];
       acc[row.rack].push(row);
       return acc;
     }, {});
-  }, [filteredRows]);
+  }, [mapRows]);
 
   const operatorActions = useMemo(() => {
     const overdue = [...summaries.overdue].sort((a, b) => (daysUntil(a.dueDate) ?? 0) - (daysUntil(b.dueDate) ?? 0));
@@ -471,10 +532,8 @@ function App() {
       .sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999))
       .slice(0, 3);
     const openNurseryRows = rows.filter((row) => row.room === 'nursery' && row.status === 'open');
-    const mappedActiveRows = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open');
     const staleRows = [...summaries.staleRows].sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || ''));
-    const freezerGapRows = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open' && toNumber(row.freezerOnHand) <= 0);
-    const offlineMappingRows = rows.filter((row) => row.status !== 'open' && !row.shopifyVariantIds);
+    const freezerGapRows = rows.filter((row) => row.status !== 'open' && toNumber(row.freezerOnHand) <= 0);
     return [
       {
         id: 'overdue',
@@ -508,25 +567,14 @@ function App() {
         id: 'freezer-gaps',
         tone: freezerGapRows.length ? 'warn' : 'ok',
         title: `${freezerGapRows.length} freezer gaps`,
-        detail: 'Mapped active bins with no freezer on-hand count in the recovered baseline.',
+        detail: 'Active bins with no freezer on-hand count in the recovered baseline.',
         rows: freezerGapRows.slice(0, 12),
-      },
-      {
-        id: 'shopify',
-        tone: 'neutral',
-        title: `${mappedActiveRows.length} mapped active bins`,
-        detail: 'Shopify visibility only. This dashboard still does not edit Shopify.',
-        rows: mappedActiveRows.slice(0, 12),
-      },
-      {
-        id: 'offline-mapping',
-        tone: offlineMappingRows.length ? 'neutral' : 'ok',
-        title: `${offlineMappingRows.length} offline/unmapped active`,
-        detail: 'Likely offline sales or bins not meant to map to Shopify. Visible, not erased.',
-        rows: offlineMappingRows.slice(0, 12),
       },
     ];
   }, [rows, summaries]);
+
+  const skuInventory = useMemo(() => buildSkuInventory(rows), [rows]);
+  const changedRows = useMemo(() => getChangedRows(rows), [rows]);
 
   function selectRoom(room) {
     setActiveRoom(room);
@@ -573,12 +621,8 @@ function App() {
     setTimeout(() => searchRef.current?.focus(), 0);
   }
 
-  function downloadBaseline() {
-    downloadText('frostbite-inventory-2026-06-18.csv', inventoryCsv);
-  }
-
   function downloadVisibleRows() {
-    downloadText(`frostbite-flow-visible-${TODAY}.csv`, rowsToCsv(filteredRows));
+    downloadText(`frostbite-flow-visible-${TODAY}.csv`, rowsToCsv(mapRows));
   }
 
   function downloadDailyReport() {
@@ -593,15 +637,137 @@ function App() {
       `Due this week: ${summaries.dueSoon.length}`,
       `Overdue: ${summaries.overdue.length}`,
       `Open: ${summaries.statusCounts.open || 0}`,
-      `Shopify mapped: ${summaries.mappedRows.length} (read-only)`,
+      `Changed since recovery baseline: ${changedRows.length}`,
+      '',
+      '## Current Inventory By SKU',
+      '| SKU | Bins | Active | Open | Due Soon | Overdue | Estimated Animals | Freezer On Hand |',
+      '|---|---:|---:|---:|---:|---:|---:|---:|',
+      ...skuInventory.map((row) => `| ${row.sku} | ${row.bins} | ${row.activeBins} | ${row.openBins} | ${row.dueSoon} | ${row.overdue} | ${row.estimatedAnimals} | ${row.freezerOnHand} |`),
       '',
       '## Operator Actions',
       ...operatorActions.map((action) => `- ${action.title}: ${action.detail}`),
+      '',
+      '## Changed Since Recovery Baseline',
+      ...(changedRows.length
+        ? changedRows.slice(0, 50).map((row) => `- ${row.bin} (${row.room}/${row.rack}): ${row.changes.map((change) => `${change.field} ${change.before || 'blank'} -> ${change.after || 'blank'}`).join('; ')}`)
+        : ['- No row-level changes detected against the recovered June 18 CSV.']),
       '',
       '## First Alerts',
       ...[...summaries.overdue, ...summaries.dueSoon].slice(0, 12).map((row) => `- ${row.bin}: ${row.sku} ${formatDate(row.dueDate)}`),
     ];
     downloadText(`frostbite-flow-report-${TODAY}.md`, lines.join('\n'), 'text/markdown');
+  }
+
+  function downloadOkfBundle() {
+    const roomNodes = uniqueValues(rows, 'room').map((room) => ({
+      id: `room:${room}`,
+      type: 'room',
+      label: room,
+      bin_count: rows.filter((row) => row.room === room).length,
+    }));
+    const rackNodes = uniqueValues(rows, 'rack').map((rack) => {
+      const rackRows = rows.filter((row) => row.rack === rack);
+      return {
+        id: `rack:${rack}`,
+        type: 'rack',
+        label: rack,
+        room: rackRows[0]?.room || null,
+        bin_count: rackRows.length,
+      };
+    });
+    const skuNodes = skuInventory.map((sku) => ({
+      id: `sku:${sku.sku}`,
+      type: 'sku',
+      label: sku.sku,
+      bins: sku.bins,
+      active_bins: sku.activeBins,
+      freezer_on_hand: sku.freezerOnHand,
+    }));
+    const binNodes = rows.map((row) => ({
+      id: `bin:${row.bin}`,
+      type: 'bin',
+      label: row.bin,
+      room: row.room,
+      rack: row.rack,
+      sku: row.sku,
+      status: row.status,
+      activity: getRowActivity(row).key,
+      due_date: row.dueDate || null,
+      updated_at: row.updatedAt || null,
+    }));
+    const graphEdges = [
+      ...rackNodes.map((rack) => ({ from: `room:${rack.room}`, to: rack.id, type: 'contains_rack' })),
+      ...rows.flatMap((row) => [
+        { from: `rack:${row.rack}`, to: `bin:${row.bin}`, type: 'contains_bin' },
+        { from: `bin:${row.bin}`, to: `sku:${row.sku}`, type: 'holds_sku' },
+      ]),
+    ];
+    const bundle = {
+      okf_version: '0.1',
+      bundle_type: 'frostbite-flow-operations-snapshot',
+      generated_at: new Date().toISOString(),
+      source: {
+        app: 'Frostbite Flow',
+        workspace: 'Frostbite-Feeders/Flow',
+        recovery_baseline: {
+          ...RECOVERY_BASELINE,
+        },
+        shared_state: {
+          id: remoteRecord?.id || null,
+          updated_at: remoteRecord?.updated_at || null,
+          status: syncState.label,
+        },
+      },
+      verification: {
+        browser_qa: 'npm run qa:browser',
+        baseline_verify: 'npm run verify',
+        last_verified_in_repo: 'See docs/DAY_2_HARDENING.md and newer commits.',
+      },
+      facts: {
+        total_bins: rows.length,
+        active_bins: summaries.activeRows.length,
+        open_bins: summaries.statusCounts.open || 0,
+        due_this_week: summaries.dueSoon.length,
+        overdue: summaries.overdue.length,
+        changed_since_recovery_baseline: changedRows.length,
+      },
+      graph: {
+        nodes: [...roomNodes, ...rackNodes, ...skuNodes, ...binNodes],
+        edges: graphEdges,
+      },
+      per_bin_inventory: rows.map((row) => ({
+        bin: row.bin,
+        room: row.room,
+        rack: row.rack,
+        type: row.type,
+        status: row.status,
+        activity: getRowActivity(row).key,
+        sku: row.sku,
+        mothers: row.mothers,
+        rats_per_litter: row.ratsPerLitter,
+        due_date: row.dueDate || null,
+        freezer_on_hand: toNumber(row.freezerOnHand),
+        updated_at: row.updatedAt || null,
+      })),
+      inventory_by_sku: skuInventory,
+      operator_actions: operatorActions.map((action) => ({
+        id: action.id,
+        tone: action.tone,
+        title: action.title,
+        detail: action.detail,
+        bins: action.rows.map((row) => row.bin),
+      })),
+      changes_since_recovery_baseline: changedRows,
+      agent_interface: {
+        read_paths: ['/api/flow/state'],
+        write_paths: ['/api/flow/state'],
+        write_scope: 'single selected Flow bin patch inside full shared-state payload',
+        browser_qa: 'scripts/qa-browser.mjs intercepts Flow writes and asserts no Shopify requests',
+        invariant: 'Shopify remains read-only and is not a visible operator workflow.',
+      },
+    };
+
+    downloadText(`frostbite-flow-okf-${TODAY}.json`, `${JSON.stringify(bundle, null, 2)}\n`, 'application/json');
   }
 
   async function refreshSharedState() {
@@ -742,7 +908,7 @@ function App() {
   );
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-testid="frostbite-flow-app">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
@@ -756,13 +922,11 @@ function App() {
           <button type="button" onClick={() => selectRoom('all')}><Building2 size={20} /> Rooms</button>
           <button type="button" onClick={focusLookup}><QrCode size={20} /> QR Lookup</button>
           <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
-          <button type="button"><ShieldCheck size={20} /> Shopify View</button>
         </nav>
 
         <div className="nav-lower">
           <button type="button"><Bell size={20} /> Alerts <span>{summaries.overdue.length}</span></button>
           <button type="button"><ClipboardList size={20} /> Tasks <span>{summaries.dueSoon.length}</span></button>
-          <button type="button"><Settings size={20} /> Settings</button>
         </div>
 
         <section className="hq-card">
@@ -781,6 +945,7 @@ function App() {
             <Search size={18} />
             <input
               ref={searchRef}
+              data-testid="bin-search"
               aria-label="Search bins, SKUs, rooms, racks, QR codes"
               placeholder="Search bins, SKUs, rooms, racks, QR codes..."
               value={query}
@@ -798,14 +963,14 @@ function App() {
         </header>
 
         <section className="actions-row">
-          <button type="button" onClick={downloadBaseline}><FileText size={17} /> Baseline</button>
-          <button type="button" onClick={focusLookup}><QrCode size={17} /> QR Lookup</button>
-          <button type="button" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
-          <button className="primary" type="button" onClick={beginQuickScan}><ScanLine size={17} /> Quick Scan</button>
+          <button type="button" data-testid="qr-lookup-action" onClick={focusLookup}><QrCode size={17} /> QR Lookup</button>
+          <button type="button" data-testid="daily-report-action" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
+          <button type="button" data-testid="okf-export-action" onClick={downloadOkfBundle}><FileText size={17} /> OKF Bundle</button>
+          <button type="button" data-testid="scan-bin-action" onClick={beginQuickScan}><ScanLine size={17} /> Scan Bin</button>
         </section>
 
         {scanMode && (
-          <section className="scan-tray" aria-label="Scan Mode">
+          <section className="scan-tray" aria-label="Scan Mode" data-testid="scan-tray">
             <div>
               <strong>Scan Mode</strong>
               <span>Type or scan a bin code, then press Enter. Current bin: {selected.bin}</span>
@@ -826,7 +991,7 @@ function App() {
           <Metric label="Due This Week" value={summaries.dueSoon.length} detail="needs eyes" tone="amber" />
           <Metric label="Overdue" value={summaries.overdue.length} detail="check first" tone="red" />
           <Metric label="Open" value={summaries.statusCounts.open || 0} detail="available bins" />
-          <Metric label="Shopify Mapped" value={summaries.mappedRows.length} detail="read-only" tone="violet" />
+          <Metric label="Changed" value={changedRows.length} detail="vs Jun 18 CSV" tone="violet" />
         </section>
 
         <section className="dashboard-grid">
@@ -863,15 +1028,11 @@ function App() {
             ))}
           </aside>
 
-          <section className="bin-map">
+          <section className="bin-map" data-testid="bin-map">
             <div className="panel-head">
               <div>
                 <h2>Bin Map</h2>
-                <p>{filteredRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
-              </div>
-              <div className="map-controls">
-                <button type="button"><Sparkles size={16} /> Flow AI</button>
-                <button type="button"><Filter size={16} /> Filter</button>
+                <p>{mapRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
               </div>
             </div>
             <div className="filter-row">
@@ -913,9 +1074,10 @@ function App() {
               {!visibleRacks.length && <div className="empty-state">No bins match this filter.</div>}
             </div>
             <div className="legend">
-              {STATUS_ORDER.map((status) => (
-                <span key={status}><i className={`dot ${status}`} />{STATUS_COPY[status]}</span>
-              ))}
+              <span><i className="dot needs-action" />Action needed</span>
+              <span><i className="dot due-soon" />Due soon</span>
+              <span><i className="dot in-use" />In use</span>
+              <span><i className="dot ready" />Ready</span>
             </div>
           </section>
 
@@ -970,7 +1132,6 @@ function App() {
         draftChanges={getDraftChanges(selected, draft)}
         writeConfirmed={writeConfirmed}
         setWriteConfirmed={setWriteConfirmed}
-        summaries={summaries}
         onSave={saveSelectedBin}
         saving={saving}
       />
@@ -1011,19 +1172,22 @@ function RackColumn({ rack, rows, selectedBin, onSelect }) {
         <strong>{counts.open || 0} open</strong>
       </header>
       <div className="bin-grid">
-        {rows.map((row) => (
-          <button
-            className={classNames('bin-cell', row.status, selectedBin === row.bin && 'active')}
-            key={row.bin}
-            type="button"
-            onClick={() => onSelect(row)}
-            title={`${row.bin} - ${row.status} - ${row.sku}`}
-          >
-            <QrCode size={13} />
-            <strong>{row.bin.split('-').at(-1)}</strong>
-            <span>{row.sku === 'No SKU' ? 'open' : row.sku}</span>
-          </button>
-        ))}
+        {rows.map((row) => {
+          const activity = getRowActivity(row);
+          return (
+            <button
+              className={classNames('bin-cell', row.status, activity.key, selectedBin === row.bin && 'active')}
+              key={row.bin}
+              type="button"
+              onClick={() => onSelect(row)}
+              title={`${row.bin} - ${activity.label} - ${row.status} - ${row.sku}`}
+            >
+              <QrCode size={13} />
+              <strong>{row.bin.split('-').at(-1)}</strong>
+              <span>{activity.key === 'ready' ? 'ready' : activity.label}</span>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -1037,11 +1201,9 @@ function BinDetail({
   draftChanges,
   writeConfirmed,
   setWriteConfirmed,
-  summaries,
   onSave,
   saving,
 }) {
-  const variants = parseVariants(selected.shopifyVariantIds);
   const due = daysUntil(selected.dueDate);
   const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
 
@@ -1142,27 +1304,6 @@ function BinDetail({
           <strong>QR target</strong>
           <code>{selected.qrTarget}</code>
         </div>
-      </section>
-
-      <section className="shopify-card">
-        <div className="shopify-head">
-          <ShieldCheck size={18} />
-          <strong>Shopify Mapping</strong>
-          <span>read-only</span>
-        </div>
-        {variants.length ? (
-          <div className="variant-list">
-            {variants.map((variant) => (
-              <div key={variant.variantId}>
-                <span>{variant.sku}</span>
-                <code>{variant.variantId}</code>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p>No variant IDs on this bin. Offline sales and unmapped bins stay visible here.</p>
-        )}
-        <small>{summaries.mappedRows.length} rows have Shopify IDs. This dashboard does not edit Shopify.</small>
       </section>
     </aside>
   );
