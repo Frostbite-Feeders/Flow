@@ -27,7 +27,7 @@ import {
 import inventoryCsv from '../data/exports/frostbite-inventory-2026-06-18.csv?raw';
 import './styles.css';
 
-const TODAY = '2026-06-19';
+const TODAY = '2026-06-20';
 const FLOW_API_BASE = '/api/flow';
 const TENANT_ID = 'frostbite';
 const ROOMS = ['all', 'breeding', 'nursery', 'growout'];
@@ -291,6 +291,24 @@ function draftFromRow(row) {
   };
 }
 
+function getDraftChanges(row, draft) {
+  if (!row || !draft) return [];
+  const checks = [
+    ['Status', row.status, draft.status],
+    ['SKU', row.sku, draft.sku],
+    ['Due date', row.dueDate || '', draft.dueDate || ''],
+    ['Birth date', row.birthDate || '', draft.birthDate || ''],
+    ['Mothers', String(row.mothers ?? 0), String(toNumber(draft.mothers))],
+    ['Rats / litter', String(row.ratsPerLitter ?? 0), String(toNumber(draft.ratsPerLitter))],
+    ['Pregnant', String(row.pregnantFemales ?? 0), String(toNumber(draft.pregnantFemales))],
+    ['Floor note', row.note || '', draft.note || ''],
+  ];
+
+  return checks
+    .filter(([, before, after]) => String(before) !== String(after))
+    .map(([label, before, after]) => ({ label, before: before || 'blank', after: after || 'blank' }));
+}
+
 async function flowApi(path, options = {}) {
   const response = await fetch(`${FLOW_API_BASE}${path}`, {
     ...options,
@@ -323,6 +341,8 @@ function App() {
   const [selectedBin, setSelectedBin] = useState(() => query || '10-1-01');
   const [draft, setDraft] = useState(null);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [writeConfirmed, setWriteConfirmed] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const draftSourceRef = useRef({ bin: null, updatedAt: null });
@@ -361,7 +381,7 @@ function App() {
     const statusCounts = countBy(rows, 'status');
     const dueSoon = rows.filter((row) => {
       const due = daysUntil(row.dueDate);
-      return due !== null && due <= 7;
+      return due !== null && due >= 0 && due <= 7;
     });
     const overdue = rows.filter((row) => {
       const due = daysUntil(row.dueDate);
@@ -420,6 +440,7 @@ function App() {
     if (!draftDirty || draftSourceRef.current.bin !== selected.bin) {
       setDraft(draftFromRow(selected));
       setDraftDirty(false);
+      setWriteConfirmed(false);
       draftSourceRef.current = {
         bin: selected.bin,
         updatedAt: selected.updatedAt || '',
@@ -444,17 +465,66 @@ function App() {
     }, {});
   }, [filteredRows]);
 
-  const intelligence = useMemo(() => {
+  const operatorActions = useMemo(() => {
+    const overdue = [...summaries.overdue].sort((a, b) => (daysUntil(a.dueDate) ?? 0) - (daysUntil(b.dueDate) ?? 0));
     const nextDue = [...summaries.dueSoon]
       .sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999))
       .slice(0, 3);
-    const openNursery = rows.filter((row) => row.room === 'nursery' && row.status === 'open').length;
-    const mappedActive = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open').length;
+    const openNurseryRows = rows.filter((row) => row.room === 'nursery' && row.status === 'open');
+    const mappedActiveRows = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open');
+    const staleRows = [...summaries.staleRows].sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || ''));
+    const freezerGapRows = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open' && toNumber(row.freezerOnHand) <= 0);
+    const offlineMappingRows = rows.filter((row) => row.status !== 'open' && !row.shopifyVariantIds);
     return [
-      `${summaries.overdue.length} bins are overdue; check these before changing freezer counts.`,
-      `${nextDue.length ? nextDue.map((row) => row.bin).join(', ') : 'No bins'} due next in the nursery/growout flow.`,
-      `${openNursery} nursery bins are open for incoming litters or cleanup planning.`,
-      `${mappedActive} active bins have Shopify variant mapping visibility.`,
+      {
+        id: 'overdue',
+        tone: overdue.length ? 'danger' : 'ok',
+        title: overdue.length ? `${overdue.length} overdue bins` : 'No overdue bins',
+        detail: overdue.length ? `${overdue.slice(0, 3).map((row) => row.bin).join(', ')} should be checked first.` : 'Nothing is past due in the loaded state.',
+        rows: overdue,
+      },
+      {
+        id: 'due-soon',
+        tone: nextDue.length ? 'warn' : 'ok',
+        title: `${nextDue.length} next due`,
+        detail: `${nextDue.length ? nextDue.map((row) => row.bin).join(', ') : 'No bins'} due next in the nursery/growout flow.`,
+        rows: nextDue,
+      },
+      {
+        id: 'capacity',
+        tone: openNurseryRows.length > 200 ? 'ok' : 'warn',
+        title: `${openNurseryRows.length} nursery bins open`,
+        detail: 'Useful for incoming litters, cleanup planning, and quick phone checks.',
+        rows: openNurseryRows.slice(0, 12),
+      },
+      {
+        id: 'stale',
+        tone: staleRows.length ? 'warn' : 'ok',
+        title: `${staleRows.length} stale or unverified`,
+        detail: staleRows.length ? `${staleRows.slice(0, 3).map((row) => row.bin).join(', ')} need a floor check.` : 'All loaded bins have fresh update timestamps.',
+        rows: staleRows.slice(0, 12),
+      },
+      {
+        id: 'freezer-gaps',
+        tone: freezerGapRows.length ? 'warn' : 'ok',
+        title: `${freezerGapRows.length} freezer gaps`,
+        detail: 'Mapped active bins with no freezer on-hand count in the recovered baseline.',
+        rows: freezerGapRows.slice(0, 12),
+      },
+      {
+        id: 'shopify',
+        tone: 'neutral',
+        title: `${mappedActiveRows.length} mapped active bins`,
+        detail: 'Shopify visibility only. This dashboard still does not edit Shopify.',
+        rows: mappedActiveRows.slice(0, 12),
+      },
+      {
+        id: 'offline-mapping',
+        tone: offlineMappingRows.length ? 'neutral' : 'ok',
+        title: `${offlineMappingRows.length} offline/unmapped active`,
+        detail: 'Likely offline sales or bins not meant to map to Shopify. Visible, not erased.',
+        rows: offlineMappingRows.slice(0, 12),
+      },
     ];
   }, [rows, summaries]);
 
@@ -497,12 +567,41 @@ function App() {
     searchRef.current?.focus();
   }
 
+  function beginQuickScan() {
+    setScanMode(true);
+    setQuery('');
+    setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
   function downloadBaseline() {
     downloadText('frostbite-inventory-2026-06-18.csv', inventoryCsv);
   }
 
   function downloadVisibleRows() {
     downloadText(`frostbite-flow-visible-${TODAY}.csv`, rowsToCsv(filteredRows));
+  }
+
+  function downloadDailyReport() {
+    const lines = [
+      '# Frostbite Flow Daily Report',
+      '',
+      `Generated: ${new Date().toLocaleString()}`,
+      `Shared state: ${syncState.label}`,
+      '',
+      `Total bins: ${rows.length}`,
+      `Active bins: ${summaries.activeRows.length}`,
+      `Due this week: ${summaries.dueSoon.length}`,
+      `Overdue: ${summaries.overdue.length}`,
+      `Open: ${summaries.statusCounts.open || 0}`,
+      `Shopify mapped: ${summaries.mappedRows.length} (read-only)`,
+      '',
+      '## Operator Actions',
+      ...operatorActions.map((action) => `- ${action.title}: ${action.detail}`),
+      '',
+      '## First Alerts',
+      ...[...summaries.overdue, ...summaries.dueSoon].slice(0, 12).map((row) => `- ${row.bin}: ${row.sku} ${formatDate(row.dueDate)}`),
+    ];
+    downloadText(`frostbite-flow-report-${TODAY}.md`, lines.join('\n'), 'text/markdown');
   }
 
   async function refreshSharedState() {
@@ -533,6 +632,14 @@ function App() {
   async function saveSelectedBin(event) {
     event.preventDefault();
     if (!selected || !draft) return;
+    if (getDraftChanges(selected, draft).length === 0) {
+      showToast('No bin changes to save');
+      return;
+    }
+    if (!writeConfirmed) {
+      showToast('Confirm the Flow write before saving');
+      return;
+    }
     const now = new Date().toISOString();
     const loadedAt = draftSourceRef.current.bin === selected.bin
       ? draftSourceRef.current.updatedAt || ''
@@ -556,6 +663,7 @@ function App() {
     if (!remoteRecord?.payload?.bins) {
       setRows((current) => current.map((row) => (row.bin === selected.bin ? nextRow : row)));
       setDraftDirty(false);
+      setWriteConfirmed(false);
       draftSourceRef.current = { bin: selected.bin, updatedAt: nextRow.updatedAt || '' };
       setSaving(false);
       setSyncState({
@@ -609,6 +717,7 @@ function App() {
       setRemoteRecord({ ...(latestRecord || {}), payload, updated_at: result?.updated_at || now });
       setRows(mergeSharedState(baselineRows, payload));
       setDraftDirty(false);
+      setWriteConfirmed(false);
       draftSourceRef.current = { bin: selected.bin, updatedAt: now };
       setSyncState({
         status: 'live',
@@ -691,8 +800,25 @@ function App() {
         <section className="actions-row">
           <button type="button" onClick={downloadBaseline}><FileText size={17} /> Baseline</button>
           <button type="button" onClick={focusLookup}><QrCode size={17} /> QR Lookup</button>
-          <button className="primary" type="button" onClick={focusLookup}><ScanLine size={17} /> Quick Scan</button>
+          <button type="button" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
+          <button className="primary" type="button" onClick={beginQuickScan}><ScanLine size={17} /> Quick Scan</button>
         </section>
+
+        {scanMode && (
+          <section className="scan-tray" aria-label="Scan Mode">
+            <div>
+              <strong>Scan Mode</strong>
+              <span>Type or scan a bin code, then press Enter. Current bin: {selected.bin}</span>
+            </div>
+            <button type="button" onClick={beginQuickScan}><ScanLine size={16} /> Focus scanner</button>
+            {operatorActions[1]?.rows?.[0] && (
+              <button type="button" onClick={() => selectBin(operatorActions[1].rows[0])}>
+                <AlertTriangle size={16} /> Next due
+              </button>
+            )}
+            <button type="button" onClick={() => setScanMode(false)}>Done</button>
+          </section>
+        )}
 
         <section className="metric-strip">
           <Metric label="Total Bins" value={rows.length} detail="100%" />
@@ -798,11 +924,19 @@ function App() {
               <h2>Flow Intelligence</h2>
               <Sparkles size={18} />
             </div>
-            {intelligence.map((line) => (
-              <div className="insight" key={line}>
+            {operatorActions.map((action) => (
+              <button
+                className={`insight ${action.tone}`}
+                key={action.id}
+                type="button"
+                onClick={() => action.rows?.[0] && selectBin(action.rows[0])}
+              >
                 <Sparkles size={16} />
-                <p>{line}</p>
-              </div>
+                <span>
+                  <strong>{action.title}</strong>
+                  <small>{action.detail}</small>
+                </span>
+              </button>
             ))}
             <div className="connection-card">
               {syncState.status === 'offline' ? <WifiOff size={18} /> : <Wifi size={18} />}
@@ -829,7 +963,13 @@ function App() {
         selected={selected}
         draft={draft}
         setDraft={setDraft}
-        onDraftDirty={() => setDraftDirty(true)}
+        onDraftDirty={() => {
+          setDraftDirty(true);
+          setWriteConfirmed(false);
+        }}
+        draftChanges={getDraftChanges(selected, draft)}
+        writeConfirmed={writeConfirmed}
+        setWriteConfirmed={setWriteConfirmed}
         summaries={summaries}
         onSave={saveSelectedBin}
         saving={saving}
@@ -889,7 +1029,18 @@ function RackColumn({ rack, rows, selectedBin, onSelect }) {
   );
 }
 
-function BinDetail({ selected, draft, setDraft, onDraftDirty, summaries, onSave, saving }) {
+function BinDetail({
+  selected,
+  draft,
+  setDraft,
+  onDraftDirty,
+  draftChanges,
+  writeConfirmed,
+  setWriteConfirmed,
+  summaries,
+  onSave,
+  saving,
+}) {
   const variants = parseVariants(selected.shopifyVariantIds);
   const due = daysUntil(selected.dueDate);
   const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
@@ -945,7 +1096,34 @@ function BinDetail({ selected, draft, setDraft, onDraftDirty, summaries, onSave,
           Floor note
           <textarea rows="3" value={draft?.note || ''} onChange={(event) => updateDraft('note', event.target.value)} />
         </label>
-        <button className="save-button" type="submit" disabled={saving}>
+        <section className="change-preview wide">
+          <div>
+            <strong>Shared write preview</strong>
+            <span>One Flow bin will be patched, one event will be appended, and Shopify stays read-only.</span>
+          </div>
+          {draftChanges.length ? (
+            <ul>
+              {draftChanges.slice(0, 5).map((change) => (
+                <li key={change.label}>
+                  <span>{change.label}</span>
+                  <code>{change.before}</code>
+                  <strong>{change.after}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No changes yet.</p>
+          )}
+        </section>
+        <label className="write-confirm wide">
+          <input
+            type="checkbox"
+            checked={writeConfirmed}
+            onChange={(event) => setWriteConfirmed(event.target.checked)}
+          />
+          <span>Confirm this writes Flow shared state only. Shopify is untouched.</span>
+        </label>
+        <button className="save-button" type="submit" disabled={saving || draftChanges.length === 0 || !writeConfirmed}>
           {saving ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
           {saving ? 'Saving...' : 'Save shared state'}
         </button>

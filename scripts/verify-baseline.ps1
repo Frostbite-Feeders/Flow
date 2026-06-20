@@ -150,6 +150,26 @@ try {
     }
   }
 
+  $sourceMutationMarkers = @(
+    'inventoryAdjustQuantity',
+    'inventorySetQuantities',
+    'productUpdate',
+    'productVariantUpdate',
+    'inventoryActivate',
+    'inventoryBulkAdjustQuantityAtLocation',
+    '/admin/api/',
+    'graphql.json'
+  )
+  $sourceFiles = Get-ChildItem -LiteralPath (Join-Path $root 'src') -Recurse -File -Include '*.js', '*.jsx', '*.ts', '*.tsx', '*.css'
+  foreach ($sourceFile in $sourceFiles) {
+    $sourceText = Get-NormalizedText $sourceFile.FullName
+    foreach ($blocked in $sourceMutationMarkers) {
+      if ($sourceText -match [regex]::Escape($blocked)) {
+        Add-Failure "source contains Shopify mutation marker $blocked in $($sourceFile.FullName)"
+      }
+    }
+  }
+
   if (-not $SkipLive) {
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if (-not $curl) {

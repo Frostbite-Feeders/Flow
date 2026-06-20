@@ -12,8 +12,45 @@ const browserErrors = [];
 const interceptedWrites = [];
 const seenRequests = [];
 const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, QR codes"]';
-const drySaveNote = 'QA dry-run from browser test';
+const drySaveNote = 'QA desktop dry-run from browser test';
+const mobileDrySaveNote = 'QA mobile scan dry-run from browser test';
 let flowStateSnapshot = null;
+
+function assertDryRunWrite({ write, originalBins, binCode, note }) {
+  if (write.body?.updated_by !== 'frostbite-flow-dashboard') {
+    throw new Error(`Unexpected updated_by on dry-run save: ${write.body?.updated_by}`);
+  }
+
+  const writtenBins = write.body?.payload?.bins || {};
+  if (Object.keys(writtenBins).length !== 714) {
+    throw new Error(`Dry-run save payload had ${Object.keys(writtenBins).length} bins, expected 714`);
+  }
+
+  const changedBinIds = Object.keys(writtenBins).filter(
+    (binId) => JSON.stringify(writtenBins[binId]) !== JSON.stringify(originalBins[binId]),
+  );
+  if (changedBinIds.length !== 1) {
+    throw new Error(`Dry-run save changed ${changedBinIds.length} bins, expected 1: ${changedBinIds.join(', ')}`);
+  }
+
+  const originalBin = Object.values(originalBins).find((bin) => bin.code === binCode);
+  const dryRunBin = Object.values(writtenBins).find((bin) => bin.code === binCode);
+  if (!originalBin || !dryRunBin) {
+    throw new Error(`Dry-run save could not find bin ${binCode}`);
+  }
+  if (changedBinIds[0] !== originalBin.id) {
+    throw new Error(`Dry-run save changed ${changedBinIds[0]}, expected ${originalBin.id}`);
+  }
+  if (dryRunBin.id !== originalBin.id || dryRunBin.room !== originalBin.room || dryRunBin.rack !== originalBin.rack || dryRunBin.type !== originalBin.type) {
+    throw new Error(`Dry-run save changed stable identity/location fields for ${binCode}`);
+  }
+  if (dryRunBin.note !== note) {
+    throw new Error(`Dry-run save did not patch ${binCode} note. Got: ${dryRunBin.note}`);
+  }
+  if (dryRunBin.events?.length !== (originalBin.events?.length || 0) + 1) {
+    throw new Error(`Dry-run save did not append exactly one bin event for ${binCode}`);
+  }
+}
 
 async function allowLocalReadAndDryRunWrite(route) {
   const request = route.request();
@@ -84,6 +121,9 @@ async function main() {
   const title = await desktop.title();
   const heading = await desktop.locator('h1').first().textContent();
   const metrics = await desktop.locator('.metric-strip').innerText();
+  await desktop.click('button:has-text("Quick Scan")');
+  await desktop.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
+  const scanModeText = await desktop.locator('section[aria-label="Scan Mode"]').innerText();
 
   await desktop.fill(searchInput, 'Pup target');
   await desktop.waitForTimeout(300);
@@ -93,6 +133,8 @@ async function main() {
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
   await desktop.locator('.edit-form textarea').fill(drySaveNote);
+  const writePreview = await desktop.locator('.change-preview').innerText();
+  await desktop.locator('.write-confirm input').check();
   await desktop.click('button:has-text("Save shared state")');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
     await desktop.waitForTimeout(100);
@@ -117,6 +159,18 @@ async function main() {
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
   await mobile.route('**/*', allowLocalReadAndDryRunWrite);
   await mobile.goto('http://127.0.0.1:5173/#10-1-01', { waitUntil: 'networkidle' });
+  await mobile.click('button:has-text("Quick Scan")');
+  await mobile.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
+  const mobileScanModeText = await mobile.locator('section[aria-label="Scan Mode"]').innerText();
+  await mobile.fill(searchInput, '10-1-01');
+  await mobile.press(searchInput, 'Enter');
+  await mobile.waitForTimeout(300);
+  await mobile.locator('.edit-form textarea').fill(mobileDrySaveNote);
+  await mobile.locator('.write-confirm input').check();
+  await mobile.click('button:has-text("Save shared state")');
+  for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
+    await mobile.waitForTimeout(100);
+  }
 
   const mobileSelectedBin = await mobile.locator('.detail-title h2').textContent();
   const mobileScreenshot = path.join(outDir, 'flow-mobile.png');
@@ -132,6 +186,9 @@ async function main() {
     qrTarget,
     mobileSelectedBin,
     metrics,
+    scanModeText,
+    mobileScanModeText,
+    writePreview,
     stateId: stateJson.id,
     stateBinCount: Object.keys(stateJson.payload?.bins || {}).length,
     dryRunWriteCount: interceptedWrites.length,
@@ -157,34 +214,21 @@ async function main() {
   if (result.stateBinCount !== 714) {
     throw new Error(`Expected 714 live bins, got ${result.stateBinCount}`);
   }
-  if (interceptedWrites.length !== 1) {
-    throw new Error(`Expected one dry-run save write, got ${interceptedWrites.length}`);
+  if (!scanModeText.includes('Scan Mode') || !scanModeText.includes('Current bin')) {
+    throw new Error(`Quick Scan tray did not render expected text: ${scanModeText}`);
   }
-  if (interceptedWrites[0].body?.updated_by !== 'frostbite-flow-dashboard') {
-    throw new Error(`Unexpected updated_by on dry-run save: ${interceptedWrites[0].body?.updated_by}`);
+  if (!mobileScanModeText.includes('Scan Mode') || !mobileScanModeText.includes('Current bin')) {
+    throw new Error(`Mobile Quick Scan tray did not render expected text: ${mobileScanModeText}`);
   }
-  const writtenBins = interceptedWrites[0].body?.payload?.bins || {};
+  if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note')) {
+    throw new Error(`Save preview did not show the changed note: ${writePreview}`);
+  }
+  if (interceptedWrites.length !== 2) {
+    throw new Error(`Expected two dry-run save writes, got ${interceptedWrites.length}`);
+  }
   const originalBins = stateJson.payload?.bins || {};
-  if (Object.keys(writtenBins).length !== 714) {
-    throw new Error(`Dry-run save payload had ${Object.keys(writtenBins).length} bins, expected 714`);
-  }
-  const changedBinIds = Object.keys(writtenBins).filter(
-    (binId) => JSON.stringify(writtenBins[binId]) !== JSON.stringify(originalBins[binId]),
-  );
-  if (changedBinIds.length !== 1) {
-    throw new Error(`Dry-run save changed ${changedBinIds.length} bins, expected 1: ${changedBinIds.join(', ')}`);
-  }
-  const originalBin = Object.values(originalBins).find((bin) => bin.code === '10-1-03');
-  const dryRunBin = Object.values(writtenBins).find((bin) => bin.code === '10-1-03');
-  if (dryRunBin?.id !== originalBin?.id || dryRunBin?.room !== originalBin?.room || dryRunBin?.rack !== originalBin?.rack || dryRunBin?.type !== originalBin?.type) {
-    throw new Error('Dry-run save changed stable identity/location fields for 10-1-03');
-  }
-  if (dryRunBin?.note !== drySaveNote) {
-    throw new Error(`Dry-run save did not patch 10-1-03 note. Got: ${dryRunBin?.note}`);
-  }
-  if (dryRunBin?.events?.length !== (originalBin?.events?.length || 0) + 1) {
-    throw new Error('Dry-run save did not append exactly one bin event');
-  }
+  assertDryRunWrite({ write: interceptedWrites[0], originalBins, binCode: '10-1-03', note: drySaveNote });
+  assertDryRunWrite({ write: interceptedWrites[1], originalBins, binCode: '10-1-01', note: mobileDrySaveNote });
   const shopifyRequests = seenRequests.filter((request) => request.url.toLowerCase().includes('shopify'));
   if (shopifyRequests.length > 0) {
     throw new Error(`Unexpected Shopify request(s): ${shopifyRequests.map((request) => `${request.method} ${request.url}`).join(', ')}`);
