@@ -1099,7 +1099,7 @@ function BinDetail({
         <section className="change-preview wide">
           <div>
             <strong>Shared write preview</strong>
-            <span>One Flow bin will be patched, one event will be appended, and Shopify stays read-only.</span>
+            <span>One Flow bin will be patched and one event will be appended.</span>
           </div>
           {draftChanges.length ? (
             <ul>
@@ -1121,7 +1121,7 @@ function BinDetail({
             checked={writeConfirmed}
             onChange={(event) => setWriteConfirmed(event.target.checked)}
           />
-          <span>Confirm this writes Flow shared state only. Shopify is untouched.</span>
+          <span>Confirm this updates Frostbite Flow shared state.</span>
         </label>
         <button className="save-button" type="submit" disabled={saving || draftChanges.length === 0 || !writeConfirmed}>
           {saving ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
