@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   Loader2,
   MapPinned,
-  Menu,
   QrCode,
   ScanLine,
   Search,
@@ -611,10 +610,6 @@ function App() {
     setQuery('');
   }
 
-  function focusLookup() {
-    searchRef.current?.focus();
-  }
-
   function beginQuickScan() {
     setScanMode(true);
     setQuery('');
@@ -920,7 +915,6 @@ function App() {
         <nav className="nav">
           <button className="active" type="button" onClick={resetFlow}><LayoutDashboard size={20} /> Dashboard</button>
           <button type="button" onClick={() => selectRoom('all')}><Building2 size={20} /> Rooms</button>
-          <button type="button" onClick={focusLookup}><QrCode size={20} /> QR Lookup</button>
           <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
         </nav>
 
@@ -940,7 +934,6 @@ function App() {
 
       <section className="main">
         <header className="topbar">
-          <button className="icon-button menu-button" type="button" aria-label="Menu"><Menu size={22} /></button>
           <form className="search" onSubmit={runQrLookup}>
             <Search size={18} />
             <input
@@ -963,7 +956,6 @@ function App() {
         </header>
 
         <section className="actions-row">
-          <button type="button" data-testid="qr-lookup-action" onClick={focusLookup}><QrCode size={17} /> QR Lookup</button>
           <button type="button" data-testid="daily-report-action" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
           <button type="button" data-testid="okf-export-action" onClick={downloadOkfBundle}><FileText size={17} /> OKF Bundle</button>
           <button type="button" data-testid="scan-bin-action" onClick={beginQuickScan}><ScanLine size={17} /> Scan Bin</button>

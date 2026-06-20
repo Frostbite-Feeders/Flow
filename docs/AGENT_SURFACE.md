@@ -8,7 +8,6 @@ Frostbite Flow is built for humans and agents. Agents should treat this repo and
 |---|---|
 | `frostbite-flow-app` | App root |
 | `bin-search` | Search/scanner input |
-| `qr-lookup-action` | Focus lookup |
 | `daily-report-action` | Export Markdown report |
 | `okf-export-action` | Export OKF JSON bundle |
 | `scan-bin-action` | Start scan-bin mode |
