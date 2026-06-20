@@ -25,7 +25,7 @@ Recovered files:
 | `docs/RECOVERY_MANIFEST.md` | Evidence, hashes, and next stabilization steps |
 | `docs/STABILIZATION_PLAN.md` | Current guardrails, deploy-source status, and next stabilization checks |
 | `scripts/verify-baseline.ps1` | Repeatable baseline verifier for the live app, CSV, legacy files, Git, and Shopify read-only guard |
-| `scripts/qa-browser.mjs` | Browser QA that blocks non-GET/external requests and verifies QR/hash lookup |
+| `scripts/qa-browser.mjs` | Browser QA that verifies live shared-state GET, QR/hash lookup, phone layout, and a locally intercepted save dry-run |
 
 ## Baseline Inventory
 
@@ -50,7 +50,9 @@ Important columns include `Bin`, `Room`, `Rack`, `Type`, `Status`, `SKU`, `Mothe
 
 ## Local Flow Cockpit
 
-The React/Vite frontend is a local-first sandbox for visually working with the recovered baseline. It reads `data/exports/frostbite-inventory-2026-06-18.csv` directly and does not call the live Flow, Supabase, or Shopify APIs on startup.
+The React/Vite frontend is the Day 1 operator cockpit for visually working with the recovered baseline. It starts from `data/exports/frostbite-inventory-2026-06-18.csv`, then reads the shared Flow state through the Vite proxy at `/api/flow/state`.
+
+The dashboard can save bin status/SKU/date/count/note edits back to Flow shared state through `/api/flow/state`. Shopify mapping is displayed read-only and the dashboard does not write to Shopify.
 
 ```powershell
 npm install
@@ -67,7 +69,7 @@ npm run qa:browser
 npm run verify
 ```
 
-The browser QA blocks non-GET and external requests, then verifies the app title, metrics, QR lookup, mobile hash lookup, and screenshots.
+The browser QA verifies the app title, metrics, live shared state (`714` bins), QR lookup, mobile hash lookup, and screenshots. It also clicks through a save flow but intercepts the `PUT /api/flow/state` locally so test runs do not mutate live inventory.
 
 ## Do Not Lose Again
 

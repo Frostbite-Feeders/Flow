@@ -9,12 +9,42 @@ mkdirSync(outDir, { recursive: true });
 const allowedOrigins = ['http://127.0.0.1:5173/', 'http://localhost:5173/'];
 const blockedRequests = [];
 const browserErrors = [];
+const interceptedWrites = [];
+const seenRequests = [];
+const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, QR codes"]';
+const drySaveNote = 'QA dry-run from browser test';
+let flowStateSnapshot = null;
 
-function allowLocalGetOnly(route) {
+async function allowLocalReadAndDryRunWrite(route) {
   const request = route.request();
   const url = request.url();
   const method = request.method();
   const isAllowedLocal = allowedOrigins.some((origin) => url.startsWith(origin));
+  const isFlowState = isAllowedLocal && new URL(url).pathname === '/api/flow/state';
+  seenRequests.push({ method, url });
+
+  if (method === 'PUT' && isFlowState) {
+    const body = request.postDataJSON();
+    interceptedWrites.push({ url, body });
+
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'frostbite-flow-live',
+        updated_at: new Date().toISOString(),
+        qaIntercepted: true,
+      }),
+    });
+  }
+
+  if (method === 'GET' && isFlowState && flowStateSnapshot) {
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(flowStateSnapshot),
+    });
+  }
 
   if (method !== 'GET' || !isAllowedLocal) {
     blockedRequests.push({
@@ -39,19 +69,37 @@ async function main() {
     if (message.type() === 'error') browserErrors.push(message.text());
   });
   desktop.on('pageerror', (error) => browserErrors.push(error.message));
-  await desktop.route('**/*', allowLocalGetOnly);
+  await desktop.route('**/*', allowLocalReadAndDryRunWrite);
 
+  const stateResponsePromise = desktop.waitForResponse(
+    (response) => response.url().endsWith('/api/flow/state') && response.request().method() === 'GET' && response.status() === 200,
+    { timeout: 15000 },
+  );
   await desktop.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' });
+  const stateResponse = await stateResponsePromise;
+  const stateJson = await stateResponse.json();
+  flowStateSnapshot = stateJson;
+  await desktop.locator('text=Shared live').first().waitFor({ timeout: 10000 });
+
   const title = await desktop.title();
   const heading = await desktop.locator('h1').first().textContent();
   const metrics = await desktop.locator('.metric-strip').innerText();
 
-  await desktop.fill('input[aria-label="Search bins, racks, notes, or QR targets"]', 'Pup target');
+  await desktop.fill(searchInput, 'Pup target');
   await desktop.waitForTimeout(300);
   const generalSearchSelectedBin = await desktop.locator('.detail-title h2').textContent();
 
-  await desktop.fill('input[aria-label="Search bins, racks, notes, or QR targets"]', '55-1-02');
-  await desktop.click('button:has-text("Find")');
+  await desktop.fill(searchInput, '10-1-03');
+  await desktop.press(searchInput, 'Enter');
+  await desktop.waitForTimeout(300);
+  await desktop.locator('.edit-form textarea').fill(drySaveNote);
+  await desktop.click('button:has-text("Save shared state")');
+  for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
+    await desktop.waitForTimeout(100);
+  }
+
+  await desktop.fill(searchInput, '55-1-02');
+  await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
 
   const selectedBin = await desktop.locator('.detail-title h2').textContent();
@@ -67,7 +115,7 @@ async function main() {
     if (message.type() === 'error') browserErrors.push(message.text());
   });
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
-  await mobile.route('**/*', allowLocalGetOnly);
+  await mobile.route('**/*', allowLocalReadAndDryRunWrite);
   await mobile.goto('http://127.0.0.1:5173/#10-1-01', { waitUntil: 'networkidle' });
 
   const mobileSelectedBin = await mobile.locator('.detail-title h2').textContent();
@@ -84,6 +132,11 @@ async function main() {
     qrTarget,
     mobileSelectedBin,
     metrics,
+    stateId: stateJson.id,
+    stateBinCount: Object.keys(stateJson.payload?.bins || {}).length,
+    dryRunWriteCount: interceptedWrites.length,
+    dryRunWriteUpdatedBy: interceptedWrites[0]?.body?.updated_by,
+    requestCount: seenRequests.length,
     blockedRequests,
     browserErrors,
     desktopScreenshot,
@@ -97,6 +150,44 @@ async function main() {
   }
   if (browserErrors.length > 0) {
     throw new Error(`Browser had ${browserErrors.length} error(s). See tmp/qa/browser-qa.json.`);
+  }
+  if (result.stateId !== 'frostbite-flow-live') {
+    throw new Error(`Expected live shared state, got ${result.stateId}`);
+  }
+  if (result.stateBinCount !== 714) {
+    throw new Error(`Expected 714 live bins, got ${result.stateBinCount}`);
+  }
+  if (interceptedWrites.length !== 1) {
+    throw new Error(`Expected one dry-run save write, got ${interceptedWrites.length}`);
+  }
+  if (interceptedWrites[0].body?.updated_by !== 'frostbite-flow-dashboard') {
+    throw new Error(`Unexpected updated_by on dry-run save: ${interceptedWrites[0].body?.updated_by}`);
+  }
+  const writtenBins = interceptedWrites[0].body?.payload?.bins || {};
+  const originalBins = stateJson.payload?.bins || {};
+  if (Object.keys(writtenBins).length !== 714) {
+    throw new Error(`Dry-run save payload had ${Object.keys(writtenBins).length} bins, expected 714`);
+  }
+  const changedBinIds = Object.keys(writtenBins).filter(
+    (binId) => JSON.stringify(writtenBins[binId]) !== JSON.stringify(originalBins[binId]),
+  );
+  if (changedBinIds.length !== 1) {
+    throw new Error(`Dry-run save changed ${changedBinIds.length} bins, expected 1: ${changedBinIds.join(', ')}`);
+  }
+  const originalBin = Object.values(originalBins).find((bin) => bin.code === '10-1-03');
+  const dryRunBin = Object.values(writtenBins).find((bin) => bin.code === '10-1-03');
+  if (dryRunBin?.id !== originalBin?.id || dryRunBin?.room !== originalBin?.room || dryRunBin?.rack !== originalBin?.rack || dryRunBin?.type !== originalBin?.type) {
+    throw new Error('Dry-run save changed stable identity/location fields for 10-1-03');
+  }
+  if (dryRunBin?.note !== drySaveNote) {
+    throw new Error(`Dry-run save did not patch 10-1-03 note. Got: ${dryRunBin?.note}`);
+  }
+  if (dryRunBin?.events?.length !== (originalBin?.events?.length || 0) + 1) {
+    throw new Error('Dry-run save did not append exactly one bin event');
+  }
+  const shopifyRequests = seenRequests.filter((request) => request.url.toLowerCase().includes('shopify'));
+  if (shopifyRequests.length > 0) {
+    throw new Error(`Unexpected Shopify request(s): ${shopifyRequests.map((request) => `${request.method} ${request.url}`).join(', ')}`);
   }
   if (title !== 'Frostbite Flow') {
     throw new Error(`Unexpected page title: ${title}`);

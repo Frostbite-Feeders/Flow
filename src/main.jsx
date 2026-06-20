@@ -1,29 +1,62 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   AlertTriangle,
-  Archive,
-  Boxes,
-  CircleDot,
+  Bell,
+  Building2,
+  Check,
+  ChevronDown,
+  ClipboardList,
   Download,
   FileText,
   Filter,
-  Lock,
+  LayoutDashboard,
+  Loader2,
   MapPinned,
-  PanelRightOpen,
+  Menu,
   QrCode,
-  ScanSearch,
+  ScanLine,
   Search,
+  Settings,
   ShieldCheck,
   Snowflake,
-  Waves,
+  Sparkles,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import inventoryCsv from '../data/exports/frostbite-inventory-2026-06-18.csv?raw';
 import './styles.css';
 
 const TODAY = '2026-06-19';
+const FLOW_API_BASE = '/api/flow';
+const TENANT_ID = 'frostbite';
 const ROOMS = ['all', 'breeding', 'nursery', 'growout'];
 const STATUS_ORDER = ['breeding', 'nursery', 'growout', 'open'];
+const SKU_OPTIONS = ['No SKU', 'Pinky', 'Fuzzy', 'Pup', 'Weaned', 'Small', 'Smedium', 'Medium', 'Large', 'Jumbo'];
+
+const STATUS_COPY = {
+  breeding: 'Breeding',
+  nursery: 'Nursery',
+  growout: 'Growout',
+  open: 'Open',
+};
+
+const SKU_TO_TARGET = {
+  'No SKU': null,
+  Pinky: 'pinky',
+  Fuzzy: 'fuzzy',
+  Pup: 'pup',
+  Weaned: 'weaned',
+  Small: 'small',
+  Smedium: 'smedium',
+  Medium: 'medium',
+  Large: 'large',
+  Jumbo: 'jumbo',
+};
+
+const TARGET_TO_SKU = Object.fromEntries(
+  Object.entries(SKU_TO_TARGET).map(([label, target]) => [target, label]),
+);
 
 function parseCsv(text) {
   const rows = [];
@@ -75,24 +108,42 @@ function parseCsv(text) {
     );
 }
 
-const inventoryRows = parseCsv(inventoryCsv).map((row) => ({
+function toNumber(value) {
+  const next = Number(value || 0);
+  return Number.isFinite(next) ? next : 0;
+}
+
+function normalizeSku(value) {
+  if (!value) return 'No SKU';
+  return value
+    .split(/[-_\s]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+const csvRows = parseCsv(inventoryCsv);
+const csvHeaders = Object.keys(csvRows[0] || {});
+
+const baselineRows = csvRows.map((row) => ({
   bin: row.Bin,
+  apiId: null,
   room: row.Room,
   rack: row.Rack,
   type: row.Type,
   status: row.Status,
   sku: row.SKU,
-  males: Number(row.Males || 0),
-  females: Number(row.Females || 0),
-  pregnantFemales: Number(row['Pregnant Females'] || 0),
-  mothers: Number(row.Mothers || 0),
-  motherSlots: Number(row['Mother Slots'] || 0),
-  ratsPerLitter: Number(row['Rats/Litter'] || 0),
-  dueDate: row['Due Date'],
-  birthDate: row['Birth Date'],
-  growoutStart: row['Grow-out Start'],
-  sourceBin: row['Source Bin'],
-  activeVacationMothers: Number(row['Active Vacation Mothers'] || 0),
+  males: toNumber(row.Males),
+  females: toNumber(row.Females),
+  pregnantFemales: toNumber(row['Pregnant Females']),
+  mothers: toNumber(row.Mothers),
+  motherSlots: toNumber(row['Mother Slots']),
+  ratsPerLitter: toNumber(row['Rats/Litter']),
+  dueDate: row['Due Date'] || '',
+  birthDate: row['Birth Date'] || '',
+  growoutStart: row['Grow-out Start'] || '',
+  sourceBin: row['Source Bin'] || '',
+  activeVacationMothers: toNumber(row['Active Vacation Mothers']),
   labelPrimary: row['Label Primary'],
   labelSecondary: row['Label Secondary'],
   qrTarget: row['QR Target'],
@@ -103,8 +154,6 @@ const inventoryRows = parseCsv(inventoryCsv).map((row) => ({
   updatedAt: row['Updated At'],
   raw: row,
 }));
-
-const csvHeaders = Object.keys(inventoryRows[0]?.raw || {});
 
 function countBy(rows, field) {
   return rows.reduce((acc, row) => {
@@ -130,10 +179,10 @@ function daysUntil(date) {
 function formatDate(date) {
   if (!date) return 'Not set';
   const delta = daysUntil(date);
-  if (delta === 0) return `${date} · today`;
-  if (delta === 1) return `${date} · tomorrow`;
-  if (delta < 0) return `${date} · ${Math.abs(delta)}d overdue`;
-  return `${date} · ${delta}d`;
+  if (delta === 0) return `${date} - today`;
+  if (delta === 1) return `${date} - tomorrow`;
+  if (delta < 0) return `${date} - ${Math.abs(delta)}d overdue`;
+  return `${date} - ${delta}d`;
 }
 
 function parseVariants(value) {
@@ -167,42 +216,178 @@ function downloadText(filename, text, type = 'text/csv') {
   }, 0);
 }
 
+function rowToRaw(row) {
+  return {
+    ...row.raw,
+    Status: row.status,
+    SKU: row.sku,
+    Mothers: String(row.mothers ?? 0),
+    'Rats/Litter': String(row.ratsPerLitter ?? 0),
+    'Due Date': row.dueDate || '',
+    'Birth Date': row.birthDate || '',
+    Note: row.note || '',
+    'Last Event': row.lastEvent || '',
+    'Updated At': row.updatedAt || '',
+  };
+}
+
 function rowsToCsv(rows) {
   return [
     csvHeaders.map(csvEscape).join(','),
-    ...rows.map((row) => csvHeaders.map((header) => csvEscape(row.raw[header])).join(',')),
+    ...rows.map((row) => {
+      const raw = rowToRaw(row);
+      return csvHeaders.map((header) => csvEscape(raw[header])).join(',');
+    }),
   ].join('\n');
 }
 
+function clonePayload(payload) {
+  return JSON.parse(JSON.stringify(payload || {}));
+}
+
+function mergeSharedState(rows, payload) {
+  const apiBins = Object.values(payload?.bins || {});
+  if (!apiBins.length) return rows;
+  const byCode = new Map(apiBins.map((bin) => [bin.code, bin]));
+
+  return rows.map((row) => {
+    const remote = byCode.get(row.bin);
+    if (!remote) return row;
+    return {
+      ...row,
+      apiId: remote.id || row.apiId,
+      room: remote.room || row.room,
+      rack: remote.rackLabel || row.rack,
+      type: remote.type || row.type,
+      status: remote.status || row.status,
+      sku: TARGET_TO_SKU[remote.skuTarget] || row.sku,
+      males: toNumber(remote.males ?? row.males),
+      females: toNumber(remote.females ?? row.females),
+      pregnantFemales: toNumber(remote.pregnantFemales ?? row.pregnantFemales),
+      mothers: toNumber(remote.mothers ?? row.mothers),
+      motherSlots: toNumber(remote.motherSlots ?? row.motherSlots),
+      ratsPerLitter: toNumber(remote.litterCount ?? row.ratsPerLitter),
+      dueDate: remote.dueDate || '',
+      birthDate: remote.birthDate || '',
+      growoutStart: remote.growoutStartDate || '',
+      sourceBin: remote.sourceBin || '',
+      note: remote.note || '',
+      updatedAt: remote.updatedAt || row.updatedAt,
+      lastEvent: remote.events?.at?.(-1)?.title || row.lastEvent,
+    };
+  });
+}
+
+function draftFromRow(row) {
+  return {
+    status: row.status,
+    sku: row.sku,
+    dueDate: row.dueDate || '',
+    birthDate: row.birthDate || '',
+    mothers: row.mothers,
+    ratsPerLitter: row.ratsPerLitter,
+    pregnantFemales: row.pregnantFemales,
+    note: row.note || '',
+  };
+}
+
+async function flowApi(path, options = {}) {
+  const response = await fetch(`${FLOW_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-tenant-id': TENANT_ID,
+      ...(options.headers || {}),
+    },
+  });
+  const text = await response.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new Error(body?.error || body?.message || `Flow API ${response.status}`);
+  }
+  return body;
+}
+
 function App() {
+  const [rows, setRows] = useState(baselineRows);
+  const [remoteRecord, setRemoteRecord] = useState(null);
+  const [syncState, setSyncState] = useState({
+    status: 'connecting',
+    label: 'Connecting to shared Flow state',
+    detail: 'Loading Supabase-backed state through /api/flow...',
+  });
   const [activeRoom, setActiveRoom] = useState('all');
   const [activeRack, setActiveRack] = useState('all');
   const [activeStatus, setActiveStatus] = useState('all');
   const [query, setQuery] = useState(() => decodeURIComponent(window.location.hash.replace(/^#/, '')));
   const [selectedBin, setSelectedBin] = useState(() => query || '10-1-01');
+  const [draft, setDraft] = useState(null);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const draftSourceRef = useRef({ bin: null, updatedAt: null });
   const searchRef = useRef(null);
 
+  useEffect(() => {
+    let ignore = false;
+    async function loadSharedState() {
+      try {
+        const record = await flowApi('/state');
+        if (ignore) return;
+        setRemoteRecord(record);
+        setRows(mergeSharedState(baselineRows, record.payload));
+        setSyncState({
+          status: 'live',
+          label: 'Shared live',
+          detail: `Supabase state loaded - ${record.updated_at ? new Date(record.updated_at).toLocaleString() : 'ready'}`,
+        });
+      } catch (error) {
+        if (ignore) return;
+        setSyncState({
+          status: 'offline',
+          label: 'Local fallback',
+          detail: error.message,
+        });
+      }
+    }
+    loadSharedState();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const summaries = useMemo(() => {
-    const roomCounts = countBy(inventoryRows, 'room');
-    const statusCounts = countBy(inventoryRows, 'status');
-    const dueSoon = inventoryRows.filter((row) => {
+    const roomCounts = countBy(rows, 'room');
+    const statusCounts = countBy(rows, 'status');
+    const dueSoon = rows.filter((row) => {
       const due = daysUntil(row.dueDate);
       return due !== null && due <= 7;
     });
-    const mappedRows = inventoryRows.filter((row) => row.shopifyVariantIds);
-    return { roomCounts, statusCounts, dueSoon, mappedRows };
-  }, []);
+    const overdue = rows.filter((row) => {
+      const due = daysUntil(row.dueDate);
+      return due !== null && due < 0;
+    });
+    const mappedRows = rows.filter((row) => row.shopifyVariantIds);
+    const activeRows = rows.filter((row) => row.status !== 'open');
+    const staleRows = rows.filter((row) => {
+      if (!row.updatedAt) return true;
+      const updated = new Date(row.updatedAt);
+      const today = new Date(`${TODAY}T00:00:00`);
+      return (today - updated) / 86400000 > 2;
+    });
+    return { roomCounts, statusCounts, dueSoon, overdue, mappedRows, activeRows, staleRows };
+  }, [rows]);
 
   const racks = useMemo(() => {
     const roomRows = activeRoom === 'all'
-      ? inventoryRows
-      : inventoryRows.filter((row) => row.room === activeRoom);
+      ? rows
+      : rows.filter((row) => row.room === activeRoom);
     return ['all', ...uniqueValues(roomRows, 'rack')];
-  }, [activeRoom]);
+  }, [activeRoom, rows]);
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return inventoryRows.filter((row) => {
+    return rows.filter((row) => {
       if (activeRoom !== 'all' && row.room !== activeRoom) return false;
       if (activeRack !== 'all' && row.rack !== activeRack) return false;
       if (activeStatus !== 'all' && row.status !== activeStatus) return false;
@@ -219,12 +404,37 @@ function App() {
         row.qrTarget,
       ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
     });
-  }, [activeRack, activeRoom, activeStatus, query]);
+  }, [activeRack, activeRoom, activeStatus, query, rows]);
 
   const selected = useMemo(() => {
     const visibleMatch = filteredRows.find((row) => row.bin === selectedBin);
-    return visibleMatch || filteredRows[0] || inventoryRows.find((row) => row.bin === selectedBin) || inventoryRows[0];
-  }, [filteredRows, selectedBin]);
+    return visibleMatch || filteredRows[0] || rows.find((row) => row.bin === selectedBin) || rows[0];
+  }, [filteredRows, rows, selectedBin]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const sourceChanged =
+      draftSourceRef.current.bin !== selected.bin ||
+      draftSourceRef.current.updatedAt !== selected.updatedAt;
+
+    if (!draftDirty || draftSourceRef.current.bin !== selected.bin) {
+      setDraft(draftFromRow(selected));
+      setDraftDirty(false);
+      draftSourceRef.current = {
+        bin: selected.bin,
+        updatedAt: selected.updatedAt || '',
+      };
+      return;
+    }
+
+    if (sourceChanged) {
+      setSyncState({
+        status: 'offline',
+        label: 'Review refresh',
+        detail: `${selected.bin} changed in shared Flow while this edit is open. Refresh before saving.`,
+      });
+    }
+  }, [draftDirty, selected?.bin, selected?.updatedAt]);
 
   const rackGroups = useMemo(() => {
     return filteredRows.reduce((acc, row) => {
@@ -233,6 +443,20 @@ function App() {
       return acc;
     }, {});
   }, [filteredRows]);
+
+  const intelligence = useMemo(() => {
+    const nextDue = [...summaries.dueSoon]
+      .sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999))
+      .slice(0, 3);
+    const openNursery = rows.filter((row) => row.room === 'nursery' && row.status === 'open').length;
+    const mappedActive = rows.filter((row) => row.shopifyVariantIds && row.status !== 'open').length;
+    return [
+      `${summaries.overdue.length} bins are overdue; check these before changing freezer counts.`,
+      `${nextDue.length ? nextDue.map((row) => row.bin).join(', ') : 'No bins'} due next in the nursery/growout flow.`,
+      `${openNursery} nursery bins are open for incoming litters or cleanup planning.`,
+      `${mappedActive} active bins have Shopify variant mapping visibility.`,
+    ];
+  }, [rows, summaries]);
 
   function selectRoom(room) {
     setActiveRoom(room);
@@ -244,10 +468,15 @@ function App() {
     window.history.replaceState(null, '', `#${encodeURIComponent(row.bin)}`);
   }
 
+  function showToast(message) {
+    setToast(message);
+    setTimeout(() => setToast(''), 2600);
+  }
+
   function runQrLookup(event) {
     event.preventDefault();
     const needle = query.trim().replace(/^.*#/, '');
-    const found = inventoryRows.find((row) => row.bin.toLowerCase() === needle.toLowerCase());
+    const found = rows.find((row) => row.bin.toLowerCase() === needle.toLowerCase());
     if (found) {
       setActiveRoom(found.room);
       setActiveRack(found.rack);
@@ -276,137 +505,337 @@ function App() {
     downloadText(`frostbite-flow-visible-${TODAY}.csv`, rowsToCsv(filteredRows));
   }
 
+  async function refreshSharedState() {
+    setSyncState({
+      status: 'connecting',
+      label: 'Refreshing',
+      detail: 'Pulling current shared Flow state...',
+    });
+    try {
+      const record = await flowApi('/state');
+      setRemoteRecord(record);
+      setRows(mergeSharedState(baselineRows, record.payload));
+      setSyncState({
+        status: 'live',
+        label: 'Shared live',
+        detail: `Refreshed - ${new Date().toLocaleTimeString()}`,
+      });
+      showToast('Shared Flow state refreshed');
+    } catch (error) {
+      setSyncState({
+        status: 'offline',
+        label: 'Local fallback',
+        detail: error.message,
+      });
+    }
+  }
+
+  async function saveSelectedBin(event) {
+    event.preventDefault();
+    if (!selected || !draft) return;
+    const now = new Date().toISOString();
+    const loadedAt = draftSourceRef.current.bin === selected.bin
+      ? draftSourceRef.current.updatedAt || ''
+      : selected.updatedAt || '';
+    const nextRow = {
+      ...selected,
+      status: draft.status,
+      sku: draft.sku,
+      dueDate: draft.dueDate,
+      birthDate: draft.birthDate,
+      mothers: toNumber(draft.mothers),
+      ratsPerLitter: toNumber(draft.ratsPerLitter),
+      pregnantFemales: toNumber(draft.pregnantFemales),
+      note: draft.note,
+      updatedAt: now,
+      lastEvent: 'Flow dashboard update',
+    };
+
+    setSaving(true);
+
+    if (!remoteRecord?.payload?.bins) {
+      setRows((current) => current.map((row) => (row.bin === selected.bin ? nextRow : row)));
+      setDraftDirty(false);
+      draftSourceRef.current = { bin: selected.bin, updatedAt: nextRow.updatedAt || '' };
+      setSaving(false);
+      setSyncState({
+        status: 'offline',
+        label: 'Local fallback',
+        detail: 'No shared payload loaded; edit kept in this browser session.',
+      });
+      showToast('Saved locally in this browser');
+      return;
+    }
+
+    try {
+      const latestRecord = await flowApi('/state');
+      const payload = clonePayload(latestRecord.payload);
+      const entry = Object.entries(payload.bins).find(([, bin]) => bin.code === selected.bin);
+      if (!entry) throw new Error(`No shared bin found for ${selected.bin}`);
+      const [apiId, apiBin] = entry;
+      const latestUpdatedAt = apiBin.updatedAt || '';
+      if (latestUpdatedAt && loadedAt && latestUpdatedAt !== loadedAt) {
+        throw new Error(`${selected.bin} changed in shared Flow. Refresh before saving.`);
+      }
+      payload.bins[apiId] = {
+        ...apiBin,
+        status: nextRow.status,
+        skuTarget: SKU_TO_TARGET[nextRow.sku] ?? null,
+        note: nextRow.note,
+        dueDate: nextRow.dueDate || null,
+        birthDate: nextRow.birthDate || null,
+        mothers: nextRow.mothers,
+        litterCount: nextRow.ratsPerLitter,
+        pregnantFemales: nextRow.pregnantFemales,
+        updatedAt: now,
+        events: [
+          ...(apiBin.events || []),
+          {
+            id: crypto.randomUUID(),
+            at: now,
+            type: 'operator_update',
+            title: 'Flow dashboard update',
+            note: nextRow.note || `${nextRow.status} - ${nextRow.sku}`,
+          },
+        ],
+      };
+      const result = await flowApi('/state', {
+        method: 'PUT',
+        body: JSON.stringify({
+          payload,
+          updated_by: 'frostbite-flow-dashboard',
+        }),
+      });
+      setRemoteRecord({ ...(latestRecord || {}), payload, updated_at: result?.updated_at || now });
+      setRows(mergeSharedState(baselineRows, payload));
+      setDraftDirty(false);
+      draftSourceRef.current = { bin: selected.bin, updatedAt: now };
+      setSyncState({
+        status: 'live',
+        label: 'Shared live',
+        detail: `Saved ${selected.bin} - ${new Date(now).toLocaleTimeString()}`,
+      });
+      showToast(`Saved ${selected.bin} to shared Flow`);
+    } catch (error) {
+      setSyncState({
+        status: 'offline',
+        label: 'Save failed',
+        detail: error.message,
+      });
+      showToast(`Save failed: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const visibleRacks = Object.entries(rackGroups).sort(([a], [b]) =>
     a.localeCompare(b, undefined, { numeric: true }),
   );
 
   return (
-    <main className="flow-shell">
+    <main className="app-shell">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <Snowflake size={22} />
+            <Snowflake size={28} />
           </div>
-          <div>
-            <h1>Frostbite Flow</h1>
-            <span>Local recovery cockpit</span>
-          </div>
+          <h1>Frostbite Flow</h1>
         </div>
 
         <nav className="nav">
-          <button className="active" type="button" onClick={resetFlow}><Waves size={18} /> Flow</button>
-          <button type="button" onClick={() => selectRoom('all')}><Boxes size={18} /> Rooms</button>
-          <button type="button" onClick={focusLookup}><QrCode size={18} /> QR Lookup</button>
-          <button type="button" onClick={downloadVisibleRows}><Archive size={18} /> Exports</button>
-          <button type="button" onClick={() => document.querySelector('.guardrail')?.scrollIntoView({ block: 'center' })}><ShieldCheck size={18} /> Guardrails</button>
+          <button className="active" type="button" onClick={resetFlow}><LayoutDashboard size={20} /> Dashboard</button>
+          <button type="button" onClick={() => selectRoom('all')}><Building2 size={20} /> Rooms</button>
+          <button type="button" onClick={focusLookup}><QrCode size={20} /> QR Lookup</button>
+          <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
+          <button type="button"><ShieldCheck size={20} /> Shopify View</button>
         </nav>
 
-        <section className="guardrail">
-          <Lock size={18} />
-          <div>
-            <strong>Shopify is read-only</strong>
-            <span>No inventory writes, product edits, deletes, or sync pushes live here.</span>
-          </div>
-        </section>
+        <div className="nav-lower">
+          <button type="button"><Bell size={20} /> Alerts <span>{summaries.overdue.length}</span></button>
+          <button type="button"><ClipboardList size={20} /> Tasks <span>{summaries.dueSoon.length}</span></button>
+          <button type="button"><Settings size={20} /> Settings</button>
+        </div>
 
-        <section className="export-ledger">
-          <span>Baseline export</span>
-          <strong>June 18 · 714 bins</strong>
-          <small>Every future export should be additive and dated.</small>
+        <section className="hq-card">
+          <div>
+            <strong>Frostbite HQ</strong>
+            <span>Shared state: {syncState.label}</span>
+          </div>
+          <small className={`sync-dot ${syncState.status}`} />
         </section>
       </aside>
 
-      <section className="workspace">
+      <section className="main">
         <header className="topbar">
+          <button className="icon-button menu-button" type="button" aria-label="Menu"><Menu size={22} /></button>
           <form className="search" onSubmit={runQrLookup}>
             <Search size={18} />
             <input
               ref={searchRef}
-              aria-label="Search bins, racks, notes, or QR targets"
-              placeholder="Search bin, rack, SKU, note, or paste QR fragment..."
+              aria-label="Search bins, SKUs, rooms, racks, QR codes"
+              placeholder="Search bins, SKUs, rooms, racks, QR codes..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-            <button type="submit"><ScanSearch size={16} /> Find</button>
+            <kbd>/</kbd>
           </form>
-          <div className="top-actions">
-            <button type="button" onClick={downloadBaseline}><FileText size={16} /> Baseline</button>
-            <button type="button" onClick={downloadVisibleRows}><Download size={16} /> Local export</button>
+          <div className="top-meta">
+            <strong>June 20, 2026</strong>
+            <button type="button" onClick={refreshSharedState}>
+              {syncState.status === 'connecting' ? <Loader2 className="spin" size={17} /> : <Wifi size={17} />}
+              {syncState.label}
+            </button>
           </div>
         </header>
 
+        <section className="actions-row">
+          <button type="button" onClick={downloadBaseline}><FileText size={17} /> Baseline</button>
+          <button type="button" onClick={focusLookup}><QrCode size={17} /> QR Lookup</button>
+          <button className="primary" type="button" onClick={focusLookup}><ScanLine size={17} /> Quick Scan</button>
+        </section>
+
         <section className="metric-strip">
-          <Metric label="Bins" value={inventoryRows.length} detail="Recovered baseline" />
-          <Metric label="Breeding" value={summaries.roomCounts.breeding} detail="Room bins" tone="green" />
-          <Metric label="Nursery" value={summaries.roomCounts.nursery} detail="Mother/litter flow" tone="blue" />
-          <Metric label="Growout" value={summaries.roomCounts.growout} detail="Batch positions" tone="amber" />
-          <Metric label="Due ≤ 7d" value={summaries.dueSoon.length} detail="Needs eyes" tone="red" />
-          <Metric label="Mapped" value={summaries.mappedRows.length} detail="Rows with Shopify IDs" tone="violet" />
+          <Metric label="Total Bins" value={rows.length} detail="100%" />
+          <Metric label="Active" value={summaries.activeRows.length} detail={`${Math.round((summaries.activeRows.length / rows.length) * 100)}%`} tone="green" />
+          <Metric label="Due This Week" value={summaries.dueSoon.length} detail="needs eyes" tone="amber" />
+          <Metric label="Overdue" value={summaries.overdue.length} detail="check first" tone="red" />
+          <Metric label="Open" value={summaries.statusCounts.open || 0} detail="available bins" />
+          <Metric label="Shopify Mapped" value={summaries.mappedRows.length} detail="read-only" tone="violet" />
         </section>
 
-        <section className="filters">
-          <div className="control-group" aria-label="Room filter">
-            {ROOMS.map((room) => (
-              <button
-                className={classNames(activeRoom === room && 'selected')}
-                key={room}
-                type="button"
-                onClick={() => selectRoom(room)}
-              >
-                {room === 'all' ? 'All Rooms' : room}
-              </button>
-            ))}
-          </div>
-          <div className="control-group rack-control" aria-label="Rack filter">
-            <Filter size={16} />
-            <select value={activeRack} onChange={(event) => setActiveRack(event.target.value)}>
-              {racks.map((rack) => (
-                <option value={rack} key={rack}>{rack === 'all' ? 'All racks' : rack}</option>
-              ))}
-            </select>
-          </div>
-          <div className="control-group" aria-label="Status filter">
-            {['all', ...STATUS_ORDER].map((status) => (
-              <button
-                className={classNames(activeStatus === status && 'selected')}
-                key={status}
-                type="button"
-                onClick={() => setActiveStatus(status)}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="flow-board">
-          <div className="board-head">
-            <div>
-              <h2>Room Flow</h2>
-              <p>{filteredRows.length} bins visible · grouped by rack</p>
+        <section className="dashboard-grid">
+          <aside className="room-list">
+            <div className="panel-head">
+              <h2>Rooms & Racks</h2>
+              <button type="button" className="icon-button"><ChevronDown size={18} /></button>
             </div>
-            <div className="status-legend">
+            <div className="mini-search">
+              <Search size={15} />
+              <input placeholder="Search rooms or racks..." value={query} onChange={(event) => setQuery(event.target.value)} />
+            </div>
+            <RoomButton label="All rooms" count={rows.length} selected={activeRoom === 'all'} onClick={() => selectRoom('all')} />
+            {ROOMS.filter((room) => room !== 'all').map((room) => (
+              <div key={room}>
+                <RoomButton
+                  label={room}
+                  count={summaries.roomCounts[room] || 0}
+                  selected={activeRoom === room}
+                  onClick={() => selectRoom(room)}
+                />
+                {activeRoom === room && uniqueValues(rows.filter((row) => row.room === room), 'rack').slice(0, 12).map((rack) => (
+                  <button
+                    className={classNames('rack-row', activeRack === rack && 'selected')}
+                    key={rack}
+                    type="button"
+                    onClick={() => setActiveRack(rack)}
+                  >
+                    {rack}
+                    <span>{rows.filter((row) => row.rack === rack).length}</span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </aside>
+
+          <section className="bin-map">
+            <div className="panel-head">
+              <div>
+                <h2>Bin Map</h2>
+                <p>{filteredRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
+              </div>
+              <div className="map-controls">
+                <button type="button"><Sparkles size={16} /> Flow AI</button>
+                <button type="button"><Filter size={16} /> Filter</button>
+              </div>
+            </div>
+            <div className="filter-row">
+              <div className="control-group" aria-label="Room filter">
+                {ROOMS.map((room) => (
+                  <button
+                    className={classNames(activeRoom === room && 'selected')}
+                    key={room}
+                    type="button"
+                    onClick={() => selectRoom(room)}
+                  >
+                    {room === 'all' ? 'All' : room}
+                  </button>
+                ))}
+              </div>
+              <div className="control-group" aria-label="Status filter">
+                {['all', ...STATUS_ORDER].map((status) => (
+                  <button
+                    className={classNames(activeStatus === status && 'selected')}
+                    key={status}
+                    type="button"
+                    onClick={() => setActiveStatus(status)}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rack-scroll">
+              {visibleRacks.map(([rack, rackRows]) => (
+                <RackColumn
+                  key={rack}
+                  rack={rack}
+                  rows={rackRows}
+                  selectedBin={selected.bin}
+                  onSelect={selectBin}
+                />
+              ))}
+              {!visibleRacks.length && <div className="empty-state">No bins match this filter.</div>}
+            </div>
+            <div className="legend">
               {STATUS_ORDER.map((status) => (
-                <span key={status}><i className={`dot ${status}`} />{status}</span>
+                <span key={status}><i className={`dot ${status}`} />{STATUS_COPY[status]}</span>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="rack-scroll">
-            {visibleRacks.map(([rack, rows]) => (
-              <RackColumn
-                key={rack}
-                rack={rack}
-                rows={rows}
-                selectedBin={selected.bin}
-                onSelect={selectBin}
-              />
+          <aside className="insight-panel">
+            <div className="panel-head">
+              <h2>Flow Intelligence</h2>
+              <Sparkles size={18} />
+            </div>
+            {intelligence.map((line) => (
+              <div className="insight" key={line}>
+                <Sparkles size={16} />
+                <p>{line}</p>
+              </div>
             ))}
-          </div>
+            <div className="connection-card">
+              {syncState.status === 'offline' ? <WifiOff size={18} /> : <Wifi size={18} />}
+              <div>
+                <strong>{syncState.label}</strong>
+                <span>{syncState.detail}</span>
+              </div>
+            </div>
+          </aside>
+        </section>
+
+        <section className="alert-strip">
+          {[...summaries.overdue, ...summaries.dueSoon].slice(0, 4).map((row) => (
+            <button type="button" key={row.bin} onClick={() => selectBin(row)}>
+              <AlertTriangle size={18} />
+              <strong>{row.bin} {daysUntil(row.dueDate) < 0 ? 'Overdue' : 'Due Soon'}</strong>
+              <span>{row.sku} - {formatDate(row.dueDate)}</span>
+            </button>
+          ))}
         </section>
       </section>
 
-      <BinDetail selected={selected} summaries={summaries} />
+      <BinDetail
+        selected={selected}
+        draft={draft}
+        setDraft={setDraft}
+        onDraftDirty={() => setDraftDirty(true)}
+        summaries={summaries}
+        onSave={saveSelectedBin}
+        saving={saving}
+      />
+
+      {toast && <div className="toast">{toast}</div>}
     </main>
   );
 }
@@ -418,6 +847,15 @@ function Metric({ label, value, detail, tone = 'neutral' }) {
       <strong>{Number(value || 0).toLocaleString()}</strong>
       <small>{detail}</small>
     </article>
+  );
+}
+
+function RoomButton({ label, count, selected, onClick }) {
+  return (
+    <button className={classNames('room-button', selected && 'selected')} type="button" onClick={onClick}>
+      <span>{label}</span>
+      <strong>{count}</strong>
+    </button>
   );
 }
 
@@ -439,8 +877,9 @@ function RackColumn({ rack, rows, selectedBin, onSelect }) {
             key={row.bin}
             type="button"
             onClick={() => onSelect(row)}
-            title={`${row.bin} · ${row.status} · ${row.sku}`}
+            title={`${row.bin} - ${row.status} - ${row.sku}`}
           >
+            <QrCode size={13} />
             <strong>{row.bin.split('-').at(-1)}</strong>
             <span>{row.sku === 'No SKU' ? 'open' : row.sku}</span>
           </button>
@@ -450,36 +889,73 @@ function RackColumn({ rack, rows, selectedBin, onSelect }) {
   );
 }
 
-function BinDetail({ selected, summaries }) {
+function BinDetail({ selected, draft, setDraft, onDraftDirty, summaries, onSave, saving }) {
   const variants = parseVariants(selected.shopifyVariantIds);
   const due = daysUntil(selected.dueDate);
   const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
+
+  function updateDraft(field, value) {
+    onDraftDirty();
+    setDraft((current) => ({ ...(current || {}), [field]: value }));
+  }
 
   return (
     <aside className="detail-panel">
       <div className="detail-title">
         <div>
-          <span>Selected bin</span>
+          <span>Bin Details</span>
           <h2>{selected.bin}</h2>
+          <p>{selected.room} / {selected.rack} / {selected.type}</p>
         </div>
-        <PanelRightOpen size={22} />
+        <button className="icon-button" type="button" aria-label="Selected bin"><QrCode size={21} /></button>
       </div>
 
-      <div className={`status-card ${selected.status}`}>
-        <CircleDot size={18} />
-        <div>
-          <strong>{selected.status}</strong>
-          <span>{selected.room} · {selected.rack} · {selected.type}</span>
-        </div>
-      </div>
+      <div className={`status-pill ${selected.status}`}>{STATUS_COPY[selected.status] || selected.status}</div>
+
+      <form className="edit-form" onSubmit={onSave}>
+        <label>
+          Status
+          <select value={draft?.status || selected.status} onChange={(event) => updateDraft('status', event.target.value)}>
+            {STATUS_ORDER.map((status) => <option key={status} value={status}>{STATUS_COPY[status]}</option>)}
+          </select>
+        </label>
+        <label>
+          SKU
+          <select value={draft?.sku || selected.sku} onChange={(event) => updateDraft('sku', event.target.value)}>
+            {SKU_OPTIONS.map((sku) => <option key={sku} value={sku}>{sku}</option>)}
+          </select>
+        </label>
+        <label>
+          Due date
+          <input type="date" value={draft?.dueDate || ''} onChange={(event) => updateDraft('dueDate', event.target.value)} />
+        </label>
+        <label>
+          Birth date
+          <input type="date" value={draft?.birthDate || ''} onChange={(event) => updateDraft('birthDate', event.target.value)} />
+        </label>
+        <label>
+          Mothers
+          <input type="number" min="0" value={draft?.mothers ?? 0} onChange={(event) => updateDraft('mothers', event.target.value)} />
+        </label>
+        <label>
+          Rats / litter
+          <input type="number" min="0" value={draft?.ratsPerLitter ?? 0} onChange={(event) => updateDraft('ratsPerLitter', event.target.value)} />
+        </label>
+        <label className="wide">
+          Floor note
+          <textarea rows="3" value={draft?.note || ''} onChange={(event) => updateDraft('note', event.target.value)} />
+        </label>
+        <button className="save-button" type="submit" disabled={saving}>
+          {saving ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
+          {saving ? 'Saving...' : 'Save shared state'}
+        </button>
+      </form>
 
       <dl className="detail-list">
-        <div><dt>SKU</dt><dd>{selected.sku}</dd></div>
-        <div><dt>Due date</dt><dd className={dueTone}>{formatDate(selected.dueDate)}</dd></div>
-        <div><dt>Birth date</dt><dd>{selected.birthDate || 'Not set'}</dd></div>
-        <div><dt>Rats / litter</dt><dd>{selected.ratsPerLitter}</dd></div>
-        <div><dt>Mothers</dt><dd>{selected.mothers} / slots {selected.motherSlots || '-'}</dd></div>
+        <div><dt>Due</dt><dd className={dueTone}>{formatDate(selected.dueDate)}</dd></div>
+        <div><dt>Updated</dt><dd>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString() : 'Not set'}</dd></div>
         <div><dt>Pregnant</dt><dd>{selected.pregnantFemales}</dd></div>
+        <div><dt>Freezer</dt><dd>{selected.freezerOnHand || 'n/a'}</dd></div>
       </dl>
 
       <section className="qr-card">
@@ -493,7 +969,7 @@ function BinDetail({ selected, summaries }) {
       <section className="shopify-card">
         <div className="shopify-head">
           <ShieldCheck size={18} />
-          <strong>Shopify mapping</strong>
+          <strong>Shopify Mapping</strong>
           <span>read-only</span>
         </div>
         {variants.length ? (
@@ -506,18 +982,9 @@ function BinDetail({ selected, summaries }) {
             ))}
           </div>
         ) : (
-          <p>No variant IDs on this bin. That is not an error; offline stock and unmapped bins stay untouched.</p>
+          <p>No variant IDs on this bin. Offline sales and unmapped bins stay visible here.</p>
         )}
-      </section>
-
-      <section className="notes-card">
-        <strong>Latest note</strong>
-        <p>{selected.note || selected.lastEvent || 'No note recorded in baseline export.'}</p>
-      </section>
-
-      <section className="risk-card">
-        <AlertTriangle size={18} />
-        <p>{summaries.mappedRows.length} rows have Shopify variant IDs. This app does not write to Shopify or Flow APIs.</p>
+        <small>{summaries.mappedRows.length} rows have Shopify IDs. This dashboard does not edit Shopify.</small>
       </section>
     </aside>
   );
