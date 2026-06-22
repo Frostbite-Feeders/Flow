@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/flow/:path*",
+      "destination": "https://app.frostbitefeeders.com/api/flow/:path*"
+    }
+  ]
+}
