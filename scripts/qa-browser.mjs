@@ -18,9 +18,12 @@ const seenRequests = [];
 const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, notes"]';
 const drySaveNote = 'QA desktop dry-run from browser test';
 const mobileDrySaveNote = 'QA mobile scan dry-run from browser test';
+const openTransitionNote = 'QA open transition dry-run';
+const desktopActualCount = 22;
+const mobileActualCount = 12;
 let flowStateSnapshot = null;
 
-function assertDryRunWrite({ write, originalBins, binCode, note }) {
+function assertDryRunWrite({ write, originalBins, binCode, note, actualCount, status, skuTarget, expectOpenCleared = false }) {
   if (write.body?.updated_by !== 'frostbite-flow-dashboard') {
     throw new Error(`Unexpected updated_by on dry-run save: ${write.body?.updated_by}`);
   }
@@ -50,6 +53,27 @@ function assertDryRunWrite({ write, originalBins, binCode, note }) {
   }
   if (dryRunBin.note !== note) {
     throw new Error(`Dry-run save did not patch ${binCode} note. Got: ${dryRunBin.note}`);
+  }
+  if (actualCount !== undefined && (dryRunBin.actualCount !== actualCount || dryRunBin.currentCount !== actualCount)) {
+    throw new Error(`Dry-run save did not patch ${binCode} actual count to ${actualCount}. Got actual=${dryRunBin.actualCount} current=${dryRunBin.currentCount}`);
+  }
+  if (status !== undefined && dryRunBin.status !== status) {
+    throw new Error(`Dry-run save did not patch ${binCode} status to ${status}. Got: ${dryRunBin.status}`);
+  }
+  if (skuTarget !== undefined && dryRunBin.skuTarget !== skuTarget) {
+    throw new Error(`Dry-run save did not patch ${binCode} skuTarget to ${skuTarget}. Got: ${dryRunBin.skuTarget}`);
+  }
+  if (expectOpenCleared) {
+    for (const field of ['dueDate', 'birthDate', 'growoutStartDate', 'sourceBin']) {
+      if (dryRunBin[field] !== null) {
+        throw new Error(`Open dry-run save should clear ${field} for ${binCode}. Got: ${dryRunBin[field]}`);
+      }
+    }
+    for (const field of ['males', 'females', 'mothers', 'litterCount', 'pregnantFemales']) {
+      if (dryRunBin[field] !== 0) {
+        throw new Error(`Open dry-run save should zero ${field} for ${binCode}. Got: ${dryRunBin[field]}`);
+      }
+    }
   }
   if (dryRunBin.events?.length !== (originalBin.events?.length || 0) + 1) {
     throw new Error(`Dry-run save did not append exactly one bin event for ${binCode}`);
@@ -139,14 +163,42 @@ async function main() {
   const generalSearchSelectedBin = await desktop.locator('.detail-title h2').textContent();
   const searchResultsText = await desktop.locator('.search-results').innerText();
 
+  await desktop.fill(searchInput, 'B1-01');
+  await desktop.press(searchInput, 'Enter');
+  await desktop.waitForTimeout(300);
+  const breedingDetailText = await desktop.locator('.detail-panel').innerText();
+
+  await desktop.fill(searchInput, 'G1-01');
+  await desktop.press(searchInput, 'Enter');
+  await desktop.waitForTimeout(300);
+  const growoutDetailText = await desktop.locator('.detail-panel').innerText();
+
   await desktop.fill(searchInput, '10-1-03');
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
+  const openDetailText = await desktop.locator('.detail-panel').innerText();
+
+  await desktop.fill(searchInput, '55-1-02');
+  await desktop.press(searchInput, 'Enter');
+  await desktop.waitForTimeout(300);
+  await desktop.getByLabel('Actual count').fill(String(desktopActualCount));
   await desktop.locator('.edit-form textarea').fill(drySaveNote);
   const writePreview = await desktop.locator('.change-preview').innerText();
   await desktop.locator('.write-confirm input').check();
   await desktop.click('button:has-text("Save shared state")');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
+    await desktop.waitForTimeout(100);
+  }
+
+  await desktop.fill(searchInput, '55-1-03');
+  await desktop.press(searchInput, 'Enter');
+  await desktop.waitForTimeout(300);
+  await desktop.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('open');
+  await desktop.locator('.edit-form textarea').fill(openTransitionNote);
+  const openTransitionPreview = await desktop.locator('.change-preview').innerText();
+  await desktop.locator('.write-confirm input').check();
+  await desktop.click('button:has-text("Save shared state")');
+  for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
     await desktop.waitForTimeout(100);
   }
 
@@ -177,10 +229,11 @@ async function main() {
   await mobile.fill(searchInput, '10-1-01');
   await mobile.press(searchInput, 'Enter');
   await mobile.waitForTimeout(300);
+  await mobile.getByLabel('Actual count').fill(String(mobileActualCount));
   await mobile.locator('.edit-form textarea').fill(mobileDrySaveNote);
   await mobile.locator('.write-confirm input').check();
   await mobile.click('button:has-text("Save shared state")');
-  for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 50 && interceptedWrites.length < 3; attempt += 1) {
     await mobile.waitForTimeout(100);
   }
 
@@ -201,7 +254,11 @@ async function main() {
     scanModeText,
     mobileScanModeText,
     searchResultsText,
+    breedingDetailText,
+    growoutDetailText,
+    openDetailText,
     writePreview,
+    openTransitionPreview,
     binMapText,
     visibleShopifyUi,
     okfFilename: okfDownload.suggestedFilename(),
@@ -245,8 +302,29 @@ async function main() {
   if (!searchResultsText.includes('55-1-03')) {
     throw new Error(`Search results did not show expected Pup match: ${searchResultsText}`);
   }
-  if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note')) {
+  for (const expected of ['Breeding', 'ACTUAL', '8 in bin', 'MALES', 'FEMALES']) {
+    if (!breedingDetailText.includes(expected)) {
+      throw new Error(`Breeding detail missing ${expected}: ${breedingDetailText}`);
+    }
+  }
+  for (const expected of ['Growout', 'ACTUAL', '42 in bin', 'SOURCE BIN']) {
+    if (!growoutDetailText.includes(expected)) {
+      throw new Error(`Growout detail missing ${expected}: ${growoutDetailText}`);
+    }
+  }
+  for (const expected of ['Open', 'Available bin capacity', 'ACTUAL', '0 in bin']) {
+    if (!openDetailText.includes(expected)) {
+      throw new Error(`Open detail missing ${expected}: ${openDetailText}`);
+    }
+  }
+  if (openDetailText.includes('SKU TARGET')) {
+    throw new Error(`Open detail should not expose SKU target controls: ${openDetailText}`);
+  }
+  if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note') || !writePreview.includes('Actual count')) {
     throw new Error(`Save preview did not show the changed note: ${writePreview}`);
+  }
+  if (!openTransitionPreview.includes('Status') || !openTransitionPreview.includes('open') || !openTransitionPreview.includes('No SKU') || !openTransitionPreview.includes('Actual count') || !openTransitionPreview.includes('Birth date')) {
+    throw new Error(`Open transition preview did not show status/SKU/count changes: ${openTransitionPreview}`);
   }
   if (visibleShopifyUi > 0) {
     throw new Error('Visible Shopify workflow copy should not be present in the operator UI');
@@ -265,6 +343,15 @@ async function main() {
   if ((okfBundle.per_bin_inventory?.length || 0) !== 714) {
     throw new Error(`OKF per-bin inventory expected 714 rows, got ${okfBundle.per_bin_inventory?.length}`);
   }
+  if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
+    throw new Error('OKF per-bin inventory is missing numeric actual_count values');
+  }
+  const b101 = okfBundle.per_bin_inventory.find((row) => row.bin === 'B1-01');
+  const g101 = okfBundle.per_bin_inventory.find((row) => row.bin === 'G1-01');
+  const open100103 = okfBundle.per_bin_inventory.find((row) => row.bin === '10-1-03');
+  if (b101?.actual_count !== 8) throw new Error(`Expected B1-01 actual_count 8, got ${b101?.actual_count}`);
+  if (g101?.actual_count !== 42) throw new Error(`Expected G1-01 actual_count 42, got ${g101?.actual_count}`);
+  if (open100103?.actual_count !== 0) throw new Error(`Expected 10-1-03 open actual_count 0, got ${open100103?.actual_count}`);
   if ((okfBundle.graph?.nodes?.length || 0) < 714 || (okfBundle.graph?.edges?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected room/rack/bin/SKU nodes or edges');
   }
@@ -280,12 +367,22 @@ async function main() {
   if (!okfBundle.agent_interface?.invariant?.includes('Shopify remains read-only')) {
     throw new Error('OKF bundle is missing the Shopify read-only invariant');
   }
-  if (interceptedWrites.length !== 2) {
-    throw new Error(`Expected two dry-run save writes, got ${interceptedWrites.length}`);
+  if (interceptedWrites.length !== 3) {
+    throw new Error(`Expected three dry-run save writes, got ${interceptedWrites.length}`);
   }
   const originalBins = stateJson.payload?.bins || {};
-  assertDryRunWrite({ write: interceptedWrites[0], originalBins, binCode: '10-1-03', note: drySaveNote });
-  assertDryRunWrite({ write: interceptedWrites[1], originalBins, binCode: '10-1-01', note: mobileDrySaveNote });
+  assertDryRunWrite({ write: interceptedWrites[0], originalBins, binCode: '55-1-02', note: drySaveNote, actualCount: desktopActualCount });
+  assertDryRunWrite({
+    write: interceptedWrites[1],
+    originalBins,
+    binCode: '55-1-03',
+    note: openTransitionNote,
+    actualCount: 0,
+    status: 'open',
+    skuTarget: null,
+    expectOpenCleared: true,
+  });
+  assertDryRunWrite({ write: interceptedWrites[2], originalBins, binCode: '10-1-01', note: mobileDrySaveNote, actualCount: mobileActualCount });
   const shopifyRequests = seenRequests.filter((request) => request.url.toLowerCase().includes('shopify'));
   if (shopifyRequests.length > 0) {
     throw new Error(`Unexpected Shopify request(s): ${shopifyRequests.map((request) => `${request.method} ${request.url}`).join(', ')}`);

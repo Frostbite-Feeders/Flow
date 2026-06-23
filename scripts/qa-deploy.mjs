@@ -10,6 +10,8 @@ const appUrl = process.env.FLOW_APP_URL || 'https://frostbite-flow.vercel.app';
 const appOrigin = new URL(appUrl).origin;
 const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, notes"]';
 const drySaveNote = 'Deploy QA dry-run from browser test';
+const openTransitionNote = 'Deploy QA open transition dry-run';
+const deployActualCount = 12;
 const blockedRequests = [];
 const browserErrors = [];
 const seenRequests = [];
@@ -55,7 +57,7 @@ async function routeDeployRequest(route) {
   return route.continue();
 }
 
-function assertDryRunWrite(write, originalBins) {
+function assertDryRunWrite({ write, originalBins, binCode, note, actualCount, status, skuTarget, expectOpenCleared = false }) {
   const writtenBins = write.body?.payload?.bins || {};
   const changedBinIds = Object.keys(writtenBins).filter(
     (binId) => JSON.stringify(writtenBins[binId]) !== JSON.stringify(originalBins[binId]),
@@ -70,11 +72,32 @@ function assertDryRunWrite(write, originalBins) {
     throw new Error(`Dry-run save changed ${changedBinIds.length} bins, expected one`);
   }
   const changedBin = writtenBins[changedBinIds[0]];
-  if (changedBin.code !== '10-1-01') {
-    throw new Error(`Dry-run save changed ${changedBin.code}, expected 10-1-01`);
+  if (changedBin.code !== binCode) {
+    throw new Error(`Dry-run save changed ${changedBin.code}, expected ${binCode}`);
   }
-  if (changedBin.note !== drySaveNote) {
+  if (changedBin.note !== note) {
     throw new Error(`Dry-run save note mismatch: ${changedBin.note}`);
+  }
+  if (actualCount !== undefined && (changedBin.actualCount !== actualCount || changedBin.currentCount !== actualCount)) {
+    throw new Error(`Dry-run save did not patch actual count to ${actualCount}. Got actual=${changedBin.actualCount} current=${changedBin.currentCount}`);
+  }
+  if (status !== undefined && changedBin.status !== status) {
+    throw new Error(`Dry-run save did not patch status to ${status}. Got ${changedBin.status}`);
+  }
+  if (skuTarget !== undefined && changedBin.skuTarget !== skuTarget) {
+    throw new Error(`Dry-run save did not patch skuTarget to ${skuTarget}. Got ${changedBin.skuTarget}`);
+  }
+  if (expectOpenCleared) {
+    for (const field of ['dueDate', 'birthDate', 'growoutStartDate', 'sourceBin']) {
+      if (changedBin[field] !== null) {
+        throw new Error(`Open dry-run save should clear ${field}. Got ${changedBin[field]}`);
+      }
+    }
+    for (const field of ['males', 'females', 'mothers', 'litterCount', 'pregnantFemales']) {
+      if (changedBin[field] !== 0) {
+        throw new Error(`Open dry-run save should zero ${field}. Got ${changedBin[field]}`);
+      }
+    }
   }
 }
 
@@ -169,6 +192,7 @@ async function main() {
   await page.fill(searchInput, '10-1-01');
   await page.press(searchInput, 'Enter');
   await page.waitForTimeout(300);
+  await page.getByLabel('Actual count').fill(String(deployActualCount));
   await page.locator('.edit-form textarea').fill(drySaveNote);
   exercisedControls.push('Floor note edit');
   await page.locator('.write-confirm input').check();
@@ -176,6 +200,19 @@ async function main() {
   await page.click('button:has-text("Save shared state")');
   exercisedControls.push('Save shared state');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
+    await page.waitForTimeout(100);
+  }
+
+  await page.fill(searchInput, '55-1-03');
+  await page.press(searchInput, 'Enter');
+  await page.waitForTimeout(300);
+  await page.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('open');
+  await page.locator('.edit-form textarea').fill(openTransitionNote);
+  exercisedControls.push('Open transition edit');
+  await page.locator('.write-confirm input').check();
+  await page.click('button:has-text("Save shared state")');
+  exercisedControls.push('Open transition dry-run save');
+  for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
     await page.waitForTimeout(100);
   }
 
@@ -218,8 +255,24 @@ async function main() {
   if (result.stateBinCount !== 714) throw new Error(`Expected 714 bins, got ${result.stateBinCount}`);
   if (selectedBeforeSave !== '10-1-01') throw new Error(`Expected selected bin 10-1-01, got ${selectedBeforeSave}`);
   if (!searchResultsText.includes('10-1-01')) throw new Error(`Search results did not show selected bin: ${searchResultsText}`);
-  if (interceptedWrites.length !== 1) throw new Error(`Expected one intercepted Flow write, got ${interceptedWrites.length}`);
-  assertDryRunWrite(interceptedWrites[0], firstStateSnapshot.payload?.bins || {});
+  if (interceptedWrites.length !== 2) throw new Error(`Expected two intercepted Flow writes, got ${interceptedWrites.length}`);
+  assertDryRunWrite({
+    write: interceptedWrites[0],
+    originalBins: firstStateSnapshot.payload?.bins || {},
+    binCode: '10-1-01',
+    note: drySaveNote,
+    actualCount: deployActualCount,
+  });
+  assertDryRunWrite({
+    write: interceptedWrites[1],
+    originalBins: firstStateSnapshot.payload?.bins || {},
+    binCode: '55-1-03',
+    note: openTransitionNote,
+    actualCount: 0,
+    status: 'open',
+    skuTarget: null,
+    expectOpenCleared: true,
+  });
   if (fakeButtonLabels !== 0) {
     throw new Error(`Found ${fakeButtonLabels} fake button(s) in non-action surfaces.`);
   }
@@ -235,6 +288,9 @@ async function main() {
   }
   if ((okfBundle.per_bin_inventory?.length || 0) !== 714) {
     throw new Error(`OKF per-bin inventory expected 714 rows, got ${okfBundle.per_bin_inventory?.length}`);
+  }
+  if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
+    throw new Error('OKF per-bin inventory is missing numeric actual_count values');
   }
   if ((okfBundle.graph?.nodes?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected nodes.');

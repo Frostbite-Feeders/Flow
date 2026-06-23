@@ -14,6 +14,8 @@ Date: 2026-06-22
 - Search now shows visible matches, selects bins while typing, and highlights matching bin cards without blanking the room/rack context.
 - Needs Check and Due Soon are real queue buttons that filter/select bins.
 - Bin cards now show different room/status micro-fields for breeding, nursery, growout, and open bins.
+- Actual count is now a first-class Flow field on cards, details, write previews, Daily Report inventory, and OKF per-bin inventory.
+- Open bins are locked to `0` actual count so available capacity does not look like live inventory.
 - Changed the operator metric from recovery-baseline delta to Changed Today.
 - Added activity colors to bin tiles:
   - red: action needed
@@ -43,6 +45,9 @@ Browser QA verifies:
 - search selects bins without emptying the bin map
 - activity-color legend is present
 - visible Shopify workflow copy is absent
+- breeding, nursery, growout, and open bin details expose different room-specific fields
+- Flow write dry-runs include actual count/current count
+- OKF per-bin inventory includes numeric `actual_count`
 - desktop and mobile Flow writes are intercepted during QA
 - OKF export parses as `frostbite-flow-operations-snapshot`
 - OKF export has `714` per-bin records, graph nodes, graph edges, and SKU inventory

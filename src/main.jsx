@@ -48,27 +48,27 @@ const STATUS_COPY = {
 const WORKFLOW_COPY = {
   breeding: {
     label: 'Breeding',
-    cardLabel: 'Mothers',
-    detail: 'Pairing and litter watch',
-    primaryFields: ['status', 'mothers', 'pregnantFemales', 'dueDate'],
+    cardLabel: 'Actual',
+    detail: 'Breeder inventory, pairing, pregnancy, and due checks',
+    primaryFields: ['status', 'actualCount', 'males', 'females', 'pregnantFemales', 'dueDate'],
   },
   nursery: {
     label: 'Nursery',
-    cardLabel: 'Pups',
-    detail: 'Birth date, litter count, and weaning flow',
-    primaryFields: ['status', 'birthDate', 'ratsPerLitter', 'sku'],
+    cardLabel: 'Actual',
+    detail: 'Mother plus litter count, birth date, and weaning target',
+    primaryFields: ['status', 'actualCount', 'mothers', 'birthDate', 'ratsPerLitter', 'sku'],
   },
   growout: {
     label: 'Growout',
-    cardLabel: 'Target',
-    detail: 'Grow-out start and feeder size target',
-    primaryFields: ['status', 'growoutStart', 'sku', 'ratsPerLitter'],
+    cardLabel: 'Actual',
+    detail: 'Feeder count, growout start, source bin, and size target',
+    primaryFields: ['status', 'actualCount', 'sku', 'growoutStart', 'sourceBin'],
   },
   open: {
     label: 'Open',
-    cardLabel: 'Ready',
-    detail: 'Available bin',
-    primaryFields: ['status', 'sku'],
+    cardLabel: 'Actual',
+    detail: 'Available bin capacity',
+    primaryFields: ['status', 'actualCount'],
   },
 };
 
@@ -199,6 +199,9 @@ const baselineRows = csvRows.map((row) => ({
   note: row.Note,
   updatedAt: row['Updated At'],
   raw: row,
+})).map((row) => ({
+  ...row,
+  actualCount: deriveActualCount(row),
 }));
 
 function countBy(rows, field) {
@@ -231,27 +234,55 @@ function formatDate(date) {
   return `${date} - ${delta}d`;
 }
 
+function deriveActualCount(row) {
+  if (row?.status === 'open') return 0;
+  if (row?.actualCount !== undefined && row.actualCount !== null && row.actualCount !== '') {
+    return toNumber(row.actualCount);
+  }
+  if (row?.currentCount !== undefined && row.currentCount !== null && row.currentCount !== '') {
+    return toNumber(row.currentCount);
+  }
+  if (row?.room === 'nursery') {
+    return toNumber(row.mothers) + toNumber(row.ratsPerLitter);
+  }
+  if (row?.room === 'growout') {
+    return toNumber(row.ratsPerLitter);
+  }
+  if (row?.room === 'breeding') {
+    const sexedTotal = toNumber(row.males) + toNumber(row.females);
+    return sexedTotal || toNumber(row.mothers);
+  }
+  return toNumber(row.ratsPerLitter);
+}
+
 function getWorkflow(row) {
-  return WORKFLOW_COPY[row.status] || WORKFLOW_COPY[row.room] || WORKFLOW_COPY.open;
+  if (row.status === 'open') return WORKFLOW_COPY.open;
+  return WORKFLOW_COPY[row.room] || WORKFLOW_COPY.open;
 }
 
 function getBinCardMeta(row) {
-  if (row.status === 'breeding') {
+  if (row.status === 'open') {
     return {
-      primary: `${row.mothers || 0} mothers`,
-      secondary: row.dueDate ? `due ${formatDate(row.dueDate).replace(row.dueDate, '').replace(' - ', '')}` : 'no due date',
+      primary: `${row.actualCount || 0} in bin`,
+      secondary: `${WORKFLOW_COPY[row.room]?.label || row.room} space`,
     };
   }
-  if (row.status === 'nursery') {
+  if (row.room === 'breeding') {
     return {
-      primary: `${row.ratsPerLitter || 0} pups`,
-      secondary: row.birthDate ? `born ${row.birthDate}` : 'birth needed',
+      primary: `${row.actualCount || 0} in bin`,
+      secondary: `${row.males || 0}M/${row.females || 0}F`,
     };
   }
-  if (row.status === 'growout') {
+  if (row.room === 'nursery') {
     return {
-      primary: row.sku || 'No target',
-      secondary: row.growoutStart ? `started ${row.growoutStart}` : 'start needed',
+      primary: `${row.actualCount || 0} in bin`,
+      secondary: `${row.ratsPerLitter || 0} pups + ${row.mothers || 0} mom`,
+    };
+  }
+  if (row.room === 'growout') {
+    return {
+      primary: `${row.actualCount || 0} in bin`,
+      secondary: row.sku || 'No target',
     };
   }
   return {
@@ -301,11 +332,15 @@ function rowToRaw(row) {
     ...row.raw,
     Status: row.status,
     SKU: row.sku,
+    Males: String(row.males ?? 0),
+    Females: String(row.females ?? 0),
     Mothers: String(row.mothers ?? 0),
+    'Pregnant Females': String(row.pregnantFemales ?? 0),
     'Rats/Litter': String(row.ratsPerLitter ?? 0),
     'Due Date': row.dueDate || '',
     'Birth Date': row.birthDate || '',
     'Grow-out Start': row.growoutStart || '',
+    'Source Bin': row.sourceBin || '',
     Note: row.note || '',
     'Last Event': row.lastEvent || '',
     'Updated At': row.updatedAt || '',
@@ -334,14 +369,27 @@ function mergeSharedState(rows, payload) {
   return rows.map((row) => {
     const remote = byCode.get(row.bin);
     if (!remote) return row;
+    const nextStatus = remote.status || row.status;
+    const nextRoom = remote.room || row.room;
     return {
       ...row,
       apiId: remote.id || row.apiId,
-      room: remote.room || row.room,
+      room: nextRoom,
       rack: remote.rackLabel || row.rack,
       type: remote.type || row.type,
-      status: remote.status || row.status,
-      sku: TARGET_TO_SKU[remote.skuTarget] || row.sku,
+      status: nextStatus,
+      sku: nextStatus === 'open' ? 'No SKU' : TARGET_TO_SKU[remote.skuTarget] || row.sku,
+      actualCount: deriveActualCount({
+        ...row,
+        status: nextStatus,
+        room: nextRoom,
+        actualCount: remote.actualCount,
+        currentCount: remote.currentCount,
+        males: remote.males ?? row.males,
+        females: remote.females ?? row.females,
+        mothers: remote.mothers ?? row.mothers,
+        ratsPerLitter: remote.litterCount ?? row.ratsPerLitter,
+      }),
       males: toNumber(remote.males ?? row.males),
       females: toNumber(remote.females ?? row.females),
       pregnantFemales: toNumber(remote.pregnantFemales ?? row.pregnantFemales),
@@ -363,9 +411,13 @@ function draftFromRow(row) {
   return {
     status: row.status,
     sku: row.sku,
+    actualCount: row.actualCount,
     dueDate: row.dueDate || '',
     birthDate: row.birthDate || '',
     growoutStart: row.growoutStart || '',
+    sourceBin: row.sourceBin || '',
+    males: row.males,
+    females: row.females,
     mothers: row.mothers,
     ratsPerLitter: row.ratsPerLitter,
     pregnantFemales: row.pregnantFemales,
@@ -375,15 +427,31 @@ function draftFromRow(row) {
 
 function getDraftChanges(row, draft) {
   if (!row || !draft) return [];
+  const effectiveStatus = draft.status;
+  const effectiveSku = effectiveStatus === 'open' ? 'No SKU' : draft.sku;
+  const effectiveActualCount = effectiveStatus === 'open' ? 0 : toNumber(draft.actualCount);
+  const effectiveDueDate = effectiveStatus === 'open' ? '' : draft.dueDate || '';
+  const effectiveBirthDate = effectiveStatus === 'open' ? '' : draft.birthDate || '';
+  const effectiveGrowoutStart = effectiveStatus === 'open' ? '' : draft.growoutStart || '';
+  const effectiveSourceBin = effectiveStatus === 'open' ? '' : draft.sourceBin || '';
+  const effectiveMales = effectiveStatus === 'open' ? 0 : toNumber(draft.males);
+  const effectiveFemales = effectiveStatus === 'open' ? 0 : toNumber(draft.females);
+  const effectiveMothers = effectiveStatus === 'open' ? 0 : toNumber(draft.mothers);
+  const effectiveRatsPerLitter = effectiveStatus === 'open' ? 0 : toNumber(draft.ratsPerLitter);
+  const effectivePregnantFemales = effectiveStatus === 'open' ? 0 : toNumber(draft.pregnantFemales);
   const checks = [
-    ['Status', row.status, draft.status],
-    ['SKU', row.sku, draft.sku],
-    ['Due date', row.dueDate || '', draft.dueDate || ''],
-    ['Birth date', row.birthDate || '', draft.birthDate || ''],
-    ['Growout start', row.growoutStart || '', draft.growoutStart || ''],
-    ['Mothers', String(row.mothers ?? 0), String(toNumber(draft.mothers))],
-    ['Rats / litter', String(row.ratsPerLitter ?? 0), String(toNumber(draft.ratsPerLitter))],
-    ['Pregnant', String(row.pregnantFemales ?? 0), String(toNumber(draft.pregnantFemales))],
+    ['Status', row.status, effectiveStatus],
+    ['SKU', row.sku, effectiveSku],
+    ['Actual count', String(row.actualCount ?? 0), String(effectiveActualCount)],
+    ['Due date', row.dueDate || '', effectiveDueDate],
+    ['Birth date', row.birthDate || '', effectiveBirthDate],
+    ['Growout start', row.growoutStart || '', effectiveGrowoutStart],
+    ['Source bin', row.sourceBin || '', effectiveSourceBin],
+    ['Males', String(row.males ?? 0), String(effectiveMales)],
+    ['Females', String(row.females ?? 0), String(effectiveFemales)],
+    ['Mothers', String(row.mothers ?? 0), String(effectiveMothers)],
+    ['Rats / litter', String(row.ratsPerLitter ?? 0), String(effectiveRatsPerLitter)],
+    ['Pregnant', String(row.pregnantFemales ?? 0), String(effectivePregnantFemales)],
     ['Floor note', row.note || '', draft.note || ''],
   ];
 
@@ -393,11 +461,11 @@ function getDraftChanges(row, draft) {
 }
 
 function getRowActivity(row) {
+  if (row.status === 'open') return { key: 'ready', label: 'Ready' };
   const due = daysUntil(row.dueDate);
   if (due !== null && due < 0) return { key: 'needs-action', label: 'Action needed' };
   if (due !== null && due <= 7) return { key: 'due-soon', label: 'Due soon' };
-  if (row.status !== 'open') return { key: 'in-use', label: 'In use' };
-  return { key: 'ready', label: 'Ready' };
+  return { key: 'in-use', label: 'In use' };
 }
 
 function buildSkuInventory(rows) {
@@ -416,9 +484,9 @@ function buildSkuInventory(rows) {
     acc[sku].bins += 1;
     if (row.status === 'open') acc[sku].openBins += 1;
     if (row.status !== 'open') acc[sku].activeBins += 1;
-    if (daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) >= 0 && daysUntil(row.dueDate) <= 7) acc[sku].dueSoon += 1;
-    if (daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) < 0) acc[sku].overdue += 1;
-    acc[sku].estimatedAnimals += toNumber(row.ratsPerLitter);
+    if (row.status !== 'open' && daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) >= 0 && daysUntil(row.dueDate) <= 7) acc[sku].dueSoon += 1;
+    if (row.status !== 'open' && daysUntil(row.dueDate) !== null && daysUntil(row.dueDate) < 0) acc[sku].overdue += 1;
+    acc[sku].estimatedAnimals += toNumber(row.actualCount);
     acc[sku].freezerOnHand += toNumber(row.freezerOnHand);
     return acc;
   }, {});
@@ -435,8 +503,13 @@ function getChangedRows(rows) {
       const changes = [
         ['status', baseline.status, row.status],
         ['sku', baseline.sku, row.sku],
+        ['actualCount', String(baseline.actualCount ?? 0), String(row.actualCount ?? 0)],
         ['dueDate', baseline.dueDate || '', row.dueDate || ''],
         ['birthDate', baseline.birthDate || '', row.birthDate || ''],
+        ['growoutStart', baseline.growoutStart || '', row.growoutStart || ''],
+        ['sourceBin', baseline.sourceBin || '', row.sourceBin || ''],
+        ['males', String(baseline.males ?? 0), String(row.males ?? 0)],
+        ['females', String(baseline.females ?? 0), String(row.females ?? 0)],
         ['mothers', String(baseline.mothers ?? 0), String(row.mothers ?? 0)],
         ['ratsPerLitter', String(baseline.ratsPerLitter ?? 0), String(row.ratsPerLitter ?? 0)],
         ['note', baseline.note || '', row.note || ''],
@@ -522,10 +595,12 @@ function App() {
     const roomCounts = countBy(rows, 'room');
     const statusCounts = countBy(rows, 'status');
     const dueSoon = rows.filter((row) => {
+      if (row.status === 'open') return false;
       const due = daysUntil(row.dueDate);
       return due !== null && due >= 0 && due <= 7;
     });
     const overdue = rows.filter((row) => {
+      if (row.status === 'open') return false;
       const due = daysUntil(row.dueDate);
       return due !== null && due < 0;
     });
@@ -780,7 +855,7 @@ function App() {
       `Changed today: ${changedTodayRows.length}`,
       '',
       '## Current Inventory By SKU',
-      '| SKU | Bins | Active | Open | Due Soon | Overdue | Estimated Animals | Freezer On Hand |',
+      '| SKU | Bins | Active | Open | Due Soon | Overdue | Actual Count | Freezer On Hand |',
       '|---|---:|---:|---:|---:|---:|---:|---:|',
       ...skuInventory.map((row) => `| ${row.sku} | ${row.bins} | ${row.activeBins} | ${row.openBins} | ${row.dueSoon} | ${row.overdue} | ${row.estimatedAnimals} | ${row.freezerOnHand} |`),
       '',
@@ -826,6 +901,7 @@ function App() {
       label: sku.sku,
       bins: sku.bins,
       active_bins: sku.activeBins,
+      actual_count: sku.estimatedAnimals,
       freezer_on_hand: sku.freezerOnHand,
     }));
     const binNodes = rows.map((row) => ({
@@ -889,7 +965,10 @@ function App() {
         status: row.status,
         activity: getRowActivity(row).key,
         sku: row.sku,
+        actual_count: row.actualCount,
         mothers: row.mothers,
+        males: row.males,
+        females: row.females,
         rats_per_litter: row.ratsPerLitter,
         due_date: row.dueDate || null,
         freezer_on_hand: toNumber(row.freezerOnHand),
@@ -976,13 +1055,17 @@ function App() {
     const nextRow = {
       ...selected,
       status: draft.status,
-      sku: draft.sku,
-      dueDate: draft.dueDate,
-      birthDate: draft.birthDate,
-      growoutStart: draft.growoutStart,
-      mothers: toNumber(draft.mothers),
-      ratsPerLitter: toNumber(draft.ratsPerLitter),
-      pregnantFemales: toNumber(draft.pregnantFemales),
+      sku: draft.status === 'open' ? 'No SKU' : draft.sku,
+      actualCount: draft.status === 'open' ? 0 : toNumber(draft.actualCount),
+      dueDate: draft.status === 'open' ? '' : draft.dueDate,
+      birthDate: draft.status === 'open' ? '' : draft.birthDate,
+      growoutStart: draft.status === 'open' ? '' : draft.growoutStart,
+      sourceBin: draft.status === 'open' ? '' : draft.sourceBin,
+      males: draft.status === 'open' ? 0 : toNumber(draft.males),
+      females: draft.status === 'open' ? 0 : toNumber(draft.females),
+      mothers: draft.status === 'open' ? 0 : toNumber(draft.mothers),
+      ratsPerLitter: draft.status === 'open' ? 0 : toNumber(draft.ratsPerLitter),
+      pregnantFemales: draft.status === 'open' ? 0 : toNumber(draft.pregnantFemales),
       note: draft.note,
       updatedAt: now,
       lastEvent: 'Flow dashboard update',
@@ -1003,11 +1086,16 @@ function App() {
       payload.bins[apiId] = {
         ...apiBin,
         status: nextRow.status,
-        skuTarget: SKU_TO_TARGET[nextRow.sku] ?? null,
+        skuTarget: nextRow.status === 'open' ? null : SKU_TO_TARGET[nextRow.sku] ?? null,
+        actualCount: nextRow.actualCount,
+        currentCount: nextRow.actualCount,
+        males: nextRow.males,
+        females: nextRow.females,
         note: nextRow.note,
         dueDate: nextRow.dueDate || null,
         birthDate: nextRow.birthDate || null,
         growoutStartDate: nextRow.growoutStart || null,
+        sourceBin: nextRow.sourceBin || null,
         mothers: nextRow.mothers,
         litterCount: nextRow.ratsPerLitter,
         pregnantFemales: nextRow.pregnantFemales,
@@ -1394,8 +1482,16 @@ function BinDetail({
 }) {
   const due = daysUntil(selected.dueDate);
   const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
-  const workflow = getWorkflow(selected);
-  const meta = getBinCardMeta(selected);
+  const displayStatus = draft?.status || selected.status;
+  const displayRow = {
+    ...selected,
+    ...(draft || {}),
+    status: displayStatus,
+    sku: displayStatus === 'open' ? 'No SKU' : draft?.sku || selected.sku,
+    actualCount: displayStatus === 'open' ? 0 : draft?.actualCount ?? selected.actualCount,
+  };
+  const workflow = getWorkflow(displayRow);
+  const meta = getBinCardMeta(displayRow);
 
   function updateDraft(field, value) {
     onDraftDirty();
@@ -1431,6 +1527,37 @@ function BinDetail({
         </label>
       );
     }
+    if (field === 'actualCount') {
+      const isOpenDraft = (draft?.status || selected.status) === 'open';
+      return (
+        <label key={field}>
+          Actual count
+          <input
+            type="number"
+            min="0"
+            value={isOpenDraft ? 0 : draft?.actualCount ?? 0}
+            disabled={isOpenDraft}
+            onChange={(event) => updateDraft('actualCount', event.target.value)}
+          />
+        </label>
+      );
+    }
+    if (field === 'males') {
+      return (
+        <label key={field}>
+          Males
+          <input type="number" min="0" value={draft?.males ?? 0} onChange={(event) => updateDraft('males', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'females') {
+      return (
+        <label key={field}>
+          Females
+          <input type="number" min="0" value={draft?.females ?? 0} onChange={(event) => updateDraft('females', event.target.value)} />
+        </label>
+      );
+    }
     if (field === 'birthDate') {
       return (
         <label key={field}>
@@ -1444,6 +1571,14 @@ function BinDetail({
         <label key={field}>
           Growout start
           <input type="date" value={draft?.growoutStart || ''} onChange={(event) => updateDraft('growoutStart', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'sourceBin') {
+      return (
+        <label key={field}>
+          Source bin
+          <input value={draft?.sourceBin || ''} onChange={(event) => updateDraft('sourceBin', event.target.value)} />
         </label>
       );
     }
@@ -1494,7 +1629,7 @@ function BinDetail({
         </div>
         <dl>
           <div><dt>{workflow.cardLabel}</dt><dd>{meta.primary}</dd></div>
-          <div><dt>Signal</dt><dd>{meta.secondary}</dd></div>
+          <div><dt>Room work</dt><dd>{meta.secondary}</dd></div>
         </dl>
       </section>
 
@@ -1539,10 +1674,10 @@ function BinDetail({
       </form>
 
       <dl className="detail-list">
+        <div><dt>Actual</dt><dd>{selected.actualCount || 0}</dd></div>
         <div><dt>Due</dt><dd className={dueTone}>{formatDate(selected.dueDate)}</dd></div>
         <div><dt>Updated</dt><dd>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString() : 'Not set'}</dd></div>
-        <div><dt>Pregnant</dt><dd>{selected.pregnantFemales}</dd></div>
-        <div><dt>Freezer</dt><dd>{selected.freezerOnHand || 'n/a'}</dd></div>
+        <div><dt>Status</dt><dd>{STATUS_COPY[selected.status] || selected.status}</dd></div>
       </dl>
 
       <section className="qr-card">
@@ -1556,4 +1691,6 @@ function BinDetail({
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+const rootElement = document.getElementById('root');
+window.__frostbiteFlowRoot ||= createRoot(rootElement);
+window.__frostbiteFlowRoot.render(<App />);
