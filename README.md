@@ -68,10 +68,27 @@ Useful checks:
 ```powershell
 npm run build
 npm run qa:browser
+npm run qa:deploy
 npm run verify
 ```
 
-The browser QA verifies the app title, metrics, live shared state (`714` bins), QR lookup, mobile hash lookup, and screenshots. It also clicks through a save flow but intercepts the `PUT /api/flow/state` locally so test runs do not mutate live inventory.
+The browser QA verifies the app title, metrics, live shared state (`714` bins), typed lookup, mobile hash lookup, and screenshots. It also clicks through a save flow but intercepts the `PUT /api/flow/state` locally so test runs do not mutate live inventory.
+
+By default `npm run qa:browser` expects the local app at `http://127.0.0.1:5173/`. If Vite picked another port, run it with `FLOW_LOCAL_URL`, for example:
+
+```powershell
+$env:FLOW_LOCAL_URL="http://127.0.0.1:5174/"; npm run qa:browser; Remove-Item Env:\FLOW_LOCAL_URL
+```
+
+The deployed-link QA checks https://frostbite-flow.vercel.app against the same operator path and intercepts the Flow write in the browser. Before real crew testing, back up the shared state:
+
+```powershell
+npm run backup:flow
+```
+
+Crew testing instructions live in `docs/CREW_TESTING_GUIDE.md`.
+
+For a deliberately live Vercel write smoke test, set `FLOW_LIVE_WRITE=1` and run `npm run smoke:flow-write`. The smoke test backs up state, writes one bin note through the Vercel UI, verifies persistence, then restores that bin.
 
 Current operator exports:
 

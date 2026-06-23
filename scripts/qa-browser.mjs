@@ -6,12 +6,16 @@ const root = process.cwd();
 const outDir = path.join(root, 'tmp', 'qa');
 mkdirSync(outDir, { recursive: true });
 
-const allowedOrigins = ['http://127.0.0.1:5173/', 'http://localhost:5173/'];
+const localAppUrl = process.env.FLOW_LOCAL_URL || 'http://127.0.0.1:5173/';
+const localUrl = new URL(localAppUrl);
+const localhostPeer = `${localUrl.protocol}//localhost:${localUrl.port || (localUrl.protocol === 'https:' ? '443' : '80')}/`;
+const loopbackPeer = `${localUrl.protocol}//127.0.0.1:${localUrl.port || (localUrl.protocol === 'https:' ? '443' : '80')}/`;
+const allowedOrigins = [...new Set([`${localUrl.origin}/`, localhostPeer, loopbackPeer])];
 const blockedRequests = [];
 const browserErrors = [];
 const interceptedWrites = [];
 const seenRequests = [];
-const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, QR codes"]';
+const searchInput = 'input[aria-label="Search bins, SKUs, rooms, racks, notes"]';
 const drySaveNote = 'QA desktop dry-run from browser test';
 const mobileDrySaveNote = 'QA mobile scan dry-run from browser test';
 let flowStateSnapshot = null;
@@ -112,7 +116,7 @@ async function main() {
     (response) => response.url().endsWith('/api/flow/state') && response.request().method() === 'GET' && response.status() === 200,
     { timeout: 15000 },
   );
-  await desktop.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle' });
+  await desktop.goto(localAppUrl, { waitUntil: 'networkidle' });
   const stateResponse = await stateResponsePromise;
   const stateJson = await stateResponse.json();
   flowStateSnapshot = stateJson;
@@ -121,9 +125,9 @@ async function main() {
   const title = await desktop.title();
   const heading = await desktop.locator('h1').first().textContent();
   const metrics = await desktop.locator('.metric-strip').innerText();
-  await desktop.click('button:has-text("Scan Bin")');
-  await desktop.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
-  const scanModeText = await desktop.locator('section[aria-label="Scan Mode"]').innerText();
+  await desktop.click('button:has-text("Find Bin")');
+  await desktop.locator('section[aria-label="Find Bin Mode"]').waitFor({ timeout: 5000 });
+  const scanModeText = await desktop.locator('section[aria-label="Find Bin Mode"]').innerText();
   const okfDownloadPromise = desktop.waitForEvent('download');
   await desktop.click('[data-testid="okf-export-action"]');
   const okfDownload = await okfDownloadPromise;
@@ -133,6 +137,7 @@ async function main() {
   await desktop.fill(searchInput, 'Pup target');
   await desktop.waitForTimeout(300);
   const generalSearchSelectedBin = await desktop.locator('.detail-title h2').textContent();
+  const searchResultsText = await desktop.locator('.search-results').innerText();
 
   await desktop.fill(searchInput, '10-1-03');
   await desktop.press(searchInput, 'Enter');
@@ -165,10 +170,10 @@ async function main() {
   });
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
   await mobile.route('**/*', allowLocalReadAndDryRunWrite);
-  await mobile.goto('http://127.0.0.1:5173/#10-1-01', { waitUntil: 'networkidle' });
-  await mobile.click('button:has-text("Scan Bin")');
-  await mobile.locator('section[aria-label="Scan Mode"]').waitFor({ timeout: 5000 });
-  const mobileScanModeText = await mobile.locator('section[aria-label="Scan Mode"]').innerText();
+  await mobile.goto(new URL('#10-1-01', localAppUrl).toString(), { waitUntil: 'networkidle' });
+  await mobile.click('button:has-text("Find Bin")');
+  await mobile.locator('section[aria-label="Find Bin Mode"]').waitFor({ timeout: 5000 });
+  const mobileScanModeText = await mobile.locator('section[aria-label="Find Bin Mode"]').innerText();
   await mobile.fill(searchInput, '10-1-01');
   await mobile.press(searchInput, 'Enter');
   await mobile.waitForTimeout(300);
@@ -195,6 +200,7 @@ async function main() {
     metrics,
     scanModeText,
     mobileScanModeText,
+    searchResultsText,
     writePreview,
     binMapText,
     visibleShopifyUi,
@@ -204,6 +210,7 @@ async function main() {
     okfGraphEdges: okfBundle.graph?.edges?.length || 0,
     okfInventorySkuCount: okfBundle.inventory_by_sku?.length || 0,
     okfPerBinCount: okfBundle.per_bin_inventory?.length || 0,
+    localAppUrl,
     stateId: stateJson.id,
     stateBinCount: Object.keys(stateJson.payload?.bins || {}).length,
     dryRunWriteCount: interceptedWrites.length,
@@ -229,11 +236,14 @@ async function main() {
   if (result.stateBinCount !== 714) {
     throw new Error(`Expected 714 live bins, got ${result.stateBinCount}`);
   }
-  if (!scanModeText.includes('Scan Mode') || !scanModeText.includes('Current bin')) {
-    throw new Error(`Scan Bin tray did not render expected text: ${scanModeText}`);
+  if (!scanModeText.includes('Find Bin Mode') || !scanModeText.includes('Current bin')) {
+    throw new Error(`Find Bin tray did not render expected text: ${scanModeText}`);
   }
-  if (!mobileScanModeText.includes('Scan Mode') || !mobileScanModeText.includes('Current bin')) {
-    throw new Error(`Mobile Scan Bin tray did not render expected text: ${mobileScanModeText}`);
+  if (!mobileScanModeText.includes('Find Bin Mode') || !mobileScanModeText.includes('Current bin')) {
+    throw new Error(`Mobile Find Bin tray did not render expected text: ${mobileScanModeText}`);
+  }
+  if (!searchResultsText.includes('55-1-03')) {
+    throw new Error(`Search results did not show expected Pup match: ${searchResultsText}`);
   }
   if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note')) {
     throw new Error(`Save preview did not show the changed note: ${writePreview}`);

@@ -1,6 +1,6 @@
 # Operator Feedback Pass
 
-Date: 2026-06-20
+Date: 2026-06-22
 
 ## What Changed
 
@@ -9,8 +9,12 @@ Date: 2026-06-20
   - No right-panel Shopify Mapping card.
   - Shopify remains read-only behind the scenes and is guarded by QA/static checks.
 - Removed the Baseline button from the main action row.
-- Renamed Quick Scan to Scan Bin so it sounds like what it actually does.
-- Kept the bin map visible while searching/scanning. Search now selects a bin without blanking the room/rack context.
+- Replaced duplicate Dashboard/Rooms navigation with one Floor Board surface and real room filters.
+- Renamed Scan Bin to Find Bin so it matches the typed/scanner-wedge workflow.
+- Search now shows visible matches, selects bins while typing, and highlights matching bin cards without blanking the room/rack context.
+- Needs Check and Due Soon are real queue buttons that filter/select bins.
+- Bin cards now show different room/status micro-fields for breeding, nursery, growout, and open bins.
+- Changed the operator metric from recovery-baseline delta to Changed Today.
 - Added activity colors to bin tiles:
   - red: action needed
   - amber: due soon
@@ -22,7 +26,7 @@ Date: 2026-06-20
 ## Plain-English Terms
 
 - Recovery baseline: the June 18, 2026 inventory CSV recovered during repo restoration. It is the comparison snapshot, not an operator task.
-- Scan Bin: focuses the bin lookup flow for a scanner wedge or typed QR/bin code. It is not a camera scanner yet.
+- Find Bin: focuses the bin lookup flow for a scanner wedge or typed bin code. It is not a camera scanner.
 - OKF Bundle: structured JSON for agents and company context graph storage. It includes facts, SKU inventory, per-bin inventory, room/rack/bin/SKU graph nodes, graph edges, changed rows, and agent interface notes.
 
 ## Verified

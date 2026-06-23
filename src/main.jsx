@@ -3,16 +3,12 @@ import { createRoot } from 'react-dom/client';
 import {
   AlertTriangle,
   Bell,
-  Building2,
   Check,
-  ChevronDown,
   ClipboardList,
   Download,
   FileText,
-  LayoutDashboard,
   Loader2,
   MapPinned,
-  QrCode,
   ScanLine,
   Search,
   Snowflake,
@@ -23,7 +19,8 @@ import {
 import inventoryCsv from '../data/exports/frostbite-inventory-2026-06-18.csv?raw';
 import './styles.css';
 
-const TODAY = '2026-06-20';
+const TODAY = getLocalDateKey();
+const TODAY_LABEL = formatDisplayDate(TODAY);
 const FLOW_API_BASE = '/api/flow';
 const TENANT_ID = 'frostbite';
 const RECOVERY_BASELINE = {
@@ -35,12 +32,44 @@ const RECOVERY_BASELINE = {
 const ROOMS = ['all', 'breeding', 'nursery', 'growout'];
 const STATUS_ORDER = ['breeding', 'nursery', 'growout', 'open'];
 const SKU_OPTIONS = ['No SKU', 'Pinky', 'Fuzzy', 'Pup', 'Weaned', 'Small', 'Smedium', 'Medium', 'Large', 'Jumbo'];
+const WORK_QUEUES = {
+  all: { label: 'All Work' },
+  alerts: { label: 'Needs Check' },
+  tasks: { label: 'Due Soon' },
+};
 
 const STATUS_COPY = {
   breeding: 'Breeding',
   nursery: 'Nursery',
   growout: 'Growout',
   open: 'Open',
+};
+
+const WORKFLOW_COPY = {
+  breeding: {
+    label: 'Breeding',
+    cardLabel: 'Mothers',
+    detail: 'Pairing and litter watch',
+    primaryFields: ['status', 'mothers', 'pregnantFemales', 'dueDate'],
+  },
+  nursery: {
+    label: 'Nursery',
+    cardLabel: 'Pups',
+    detail: 'Birth date, litter count, and weaning flow',
+    primaryFields: ['status', 'birthDate', 'ratsPerLitter', 'sku'],
+  },
+  growout: {
+    label: 'Growout',
+    cardLabel: 'Target',
+    detail: 'Grow-out start and feeder size target',
+    primaryFields: ['status', 'growoutStart', 'sku', 'ratsPerLitter'],
+  },
+  open: {
+    label: 'Open',
+    cardLabel: 'Ready',
+    detail: 'Available bin',
+    primaryFields: ['status', 'sku'],
+  },
 };
 
 const SKU_TO_TARGET = {
@@ -115,6 +144,21 @@ function toNumber(value) {
   return Number.isFinite(next) ? next : 0;
 }
 
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateKey) {
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 function normalizeSku(value) {
   if (!value) return 'No SKU';
   return value
@@ -187,6 +231,48 @@ function formatDate(date) {
   return `${date} - ${delta}d`;
 }
 
+function getWorkflow(row) {
+  return WORKFLOW_COPY[row.status] || WORKFLOW_COPY[row.room] || WORKFLOW_COPY.open;
+}
+
+function getBinCardMeta(row) {
+  if (row.status === 'breeding') {
+    return {
+      primary: `${row.mothers || 0} mothers`,
+      secondary: row.dueDate ? `due ${formatDate(row.dueDate).replace(row.dueDate, '').replace(' - ', '')}` : 'no due date',
+    };
+  }
+  if (row.status === 'nursery') {
+    return {
+      primary: `${row.ratsPerLitter || 0} pups`,
+      secondary: row.birthDate ? `born ${row.birthDate}` : 'birth needed',
+    };
+  }
+  if (row.status === 'growout') {
+    return {
+      primary: row.sku || 'No target',
+      secondary: row.growoutStart ? `started ${row.growoutStart}` : 'start needed',
+    };
+  }
+  return {
+    primary: row.type || 'available',
+    secondary: 'ready',
+  };
+}
+
+function getCardSignal(activity, meta) {
+  if (activity.key === 'needs-action') return 'Check';
+  if (activity.key === 'due-soon') return 'Due soon';
+  return meta.secondary;
+}
+
+function matchesWorkQueue(row, queue) {
+  const due = daysUntil(row.dueDate);
+  if (queue === 'alerts') return due !== null && due < 0;
+  if (queue === 'tasks') return due !== null && due >= 0 && due <= 7;
+  return true;
+}
+
 function classNames(...parts) {
   return parts.filter(Boolean).join(' ');
 }
@@ -219,6 +305,7 @@ function rowToRaw(row) {
     'Rats/Litter': String(row.ratsPerLitter ?? 0),
     'Due Date': row.dueDate || '',
     'Birth Date': row.birthDate || '',
+    'Grow-out Start': row.growoutStart || '',
     Note: row.note || '',
     'Last Event': row.lastEvent || '',
     'Updated At': row.updatedAt || '',
@@ -278,6 +365,7 @@ function draftFromRow(row) {
     sku: row.sku,
     dueDate: row.dueDate || '',
     birthDate: row.birthDate || '',
+    growoutStart: row.growoutStart || '',
     mothers: row.mothers,
     ratsPerLitter: row.ratsPerLitter,
     pregnantFemales: row.pregnantFemales,
@@ -292,6 +380,7 @@ function getDraftChanges(row, draft) {
     ['SKU', row.sku, draft.sku],
     ['Due date', row.dueDate || '', draft.dueDate || ''],
     ['Birth date', row.birthDate || '', draft.birthDate || ''],
+    ['Growout start', row.growoutStart || '', draft.growoutStart || ''],
     ['Mothers', String(row.mothers ?? 0), String(toNumber(draft.mothers))],
     ['Rats / litter', String(row.ratsPerLitter ?? 0), String(toNumber(draft.ratsPerLitter))],
     ['Pregnant', String(row.pregnantFemales ?? 0), String(toNumber(draft.pregnantFemales))],
@@ -389,6 +478,7 @@ function App() {
   const [activeRoom, setActiveRoom] = useState('all');
   const [activeRack, setActiveRack] = useState('all');
   const [activeStatus, setActiveStatus] = useState('all');
+  const [activeWorkQueue, setActiveWorkQueue] = useState('all');
   const [query, setQuery] = useState(() => decodeURIComponent(window.location.hash.replace(/^#/, '')));
   const [selectedBin, setSelectedBin] = useState(() => query || '10-1-01');
   const [draft, setDraft] = useState(null);
@@ -449,6 +539,10 @@ function App() {
     return { roomCounts, statusCounts, dueSoon, overdue, activeRows, staleRows };
   }, [rows]);
 
+  const changedTodayRows = useMemo(() => {
+    return rows.filter((row) => (row.updatedAt || '').startsWith(TODAY));
+  }, [rows]);
+
   const racks = useMemo(() => {
     const roomRows = activeRoom === 'all'
       ? rows
@@ -477,14 +571,43 @@ function App() {
     });
   }, [activeRack, activeRoom, activeStatus, query, rows]);
 
+  const searchMatches = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+    return rows
+      .filter((row) =>
+        [
+          row.bin,
+          row.room,
+          row.rack,
+          row.type,
+          row.status,
+          row.sku,
+          row.note,
+          row.lastEvent,
+          row.qrTarget,
+        ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)),
+      )
+      .sort((a, b) => {
+        const aExact = a.bin.toLowerCase() === normalizedQuery ? 0 : 1;
+        const bExact = b.bin.toLowerCase() === normalizedQuery ? 0 : 1;
+        return aExact - bExact || a.bin.localeCompare(b.bin, undefined, { numeric: true });
+      });
+  }, [query, rows]);
+
   const mapRows = useMemo(() => {
     return rows.filter((row) => {
       if (activeRoom !== 'all' && row.room !== activeRoom) return false;
       if (activeRack !== 'all' && row.rack !== activeRack) return false;
       if (activeStatus !== 'all' && row.status !== activeStatus) return false;
+      if (!matchesWorkQueue(row, activeWorkQueue)) return false;
       return true;
     });
-  }, [activeRack, activeRoom, activeStatus, rows]);
+  }, [activeRack, activeRoom, activeStatus, activeWorkQueue, rows]);
+
+  const searchMatchBins = useMemo(() => {
+    return new Set(searchMatches.map((row) => row.bin));
+  }, [searchMatches]);
 
   const selected = useMemo(() => {
     const visibleMatch = filteredRows.find((row) => row.bin === selectedBin);
@@ -517,6 +640,16 @@ function App() {
     }
   }, [draftDirty, selected?.bin, selected?.updatedAt]);
 
+  useEffect(() => {
+    if (!query.trim() || !searchMatches.length) return;
+    const exact = searchMatches.find((row) => row.bin.toLowerCase() === query.trim().toLowerCase());
+    const next = exact || searchMatches[0];
+    if (next?.bin && next.bin !== selectedBin && !draftDirty) {
+      setSelectedBin(next.bin);
+      window.history.replaceState(null, '', `#${encodeURIComponent(next.bin)}`);
+    }
+  }, [draftDirty, query, searchMatches, selectedBin]);
+
   const rackGroups = useMemo(() => {
     return mapRows.reduce((acc, row) => {
       acc[row.rack] = acc[row.rack] || [];
@@ -527,12 +660,10 @@ function App() {
 
   const operatorActions = useMemo(() => {
     const overdue = [...summaries.overdue].sort((a, b) => (daysUntil(a.dueDate) ?? 0) - (daysUntil(b.dueDate) ?? 0));
-    const nextDue = [...summaries.dueSoon]
-      .sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999))
-      .slice(0, 3);
+    const nextDue = [...summaries.dueSoon].sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999));
     const openNurseryRows = rows.filter((row) => row.room === 'nursery' && row.status === 'open');
-    const staleRows = [...summaries.staleRows].sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || ''));
-    const freezerGapRows = rows.filter((row) => row.status !== 'open' && toNumber(row.freezerOnHand) <= 0);
+    const breedingDueMissing = rows.filter((row) => row.status === 'breeding' && !row.dueDate);
+    const editedToday = [...changedTodayRows].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     return [
       {
         id: 'overdue',
@@ -544,9 +675,16 @@ function App() {
       {
         id: 'due-soon',
         tone: nextDue.length ? 'warn' : 'ok',
-        title: `${nextDue.length} next due`,
+        title: `${nextDue.length} due soon`,
         detail: `${nextDue.length ? nextDue.map((row) => row.bin).join(', ') : 'No bins'} due next in the nursery/growout flow.`,
-        rows: nextDue,
+        rows: nextDue.slice(0, 12),
+      },
+      {
+        id: 'breeding-missing-dates',
+        tone: breedingDueMissing.length ? 'warn' : 'ok',
+        title: `${breedingDueMissing.length} breeding bins need dates`,
+        detail: breedingDueMissing.length ? `${breedingDueMissing.slice(0, 3).map((row) => row.bin).join(', ')} need a due date or floor note.` : 'Breeding bins have dates or notes ready.',
+        rows: breedingDueMissing.slice(0, 12),
       },
       {
         id: 'capacity',
@@ -556,21 +694,14 @@ function App() {
         rows: openNurseryRows.slice(0, 12),
       },
       {
-        id: 'stale',
-        tone: staleRows.length ? 'warn' : 'ok',
-        title: `${staleRows.length} stale or unverified`,
-        detail: staleRows.length ? `${staleRows.slice(0, 3).map((row) => row.bin).join(', ')} need a floor check.` : 'All loaded bins have fresh update timestamps.',
-        rows: staleRows.slice(0, 12),
-      },
-      {
-        id: 'freezer-gaps',
-        tone: freezerGapRows.length ? 'warn' : 'ok',
-        title: `${freezerGapRows.length} freezer gaps`,
-        detail: 'Active bins with no freezer on-hand count in the recovered baseline.',
-        rows: freezerGapRows.slice(0, 12),
+        id: 'edited-today',
+        tone: editedToday.length ? 'ok' : 'warn',
+        title: `${editedToday.length} saved today`,
+        detail: editedToday.length ? `${editedToday.slice(0, 3).map((row) => row.bin).join(', ')} already changed in Flow today.` : 'No Flow saves yet today.',
+        rows: editedToday.slice(0, 12),
       },
     ];
-  }, [rows, summaries]);
+  }, [changedTodayRows, rows, summaries]);
 
   const skuInventory = useMemo(() => buildSkuInventory(rows), [rows]);
   const changedRows = useMemo(() => getChangedRows(rows), [rows]);
@@ -578,6 +709,9 @@ function App() {
   function selectRoom(room) {
     setActiveRoom(room);
     setActiveRack('all');
+    setActiveWorkQueue('all');
+    const first = rows.find((row) => room === 'all' || row.room === room);
+    if (first) selectBin(first);
   }
 
   function selectBin(row) {
@@ -607,6 +741,7 @@ function App() {
     setActiveRoom('all');
     setActiveRack('all');
     setActiveStatus('all');
+    setActiveWorkQueue('all');
     setQuery('');
   }
 
@@ -614,6 +749,16 @@ function App() {
     setScanMode(true);
     setQuery('');
     setTimeout(() => searchRef.current?.focus(), 0);
+  }
+
+  function selectWorkQueue(queue) {
+    setActiveWorkQueue(queue);
+    setActiveRoom('all');
+    setActiveRack('all');
+    setActiveStatus('all');
+    if (queue === 'all') return;
+    const first = rows.find((row) => matchesWorkQueue(row, queue));
+    if (first) selectBin(first);
   }
 
   function downloadVisibleRows() {
@@ -632,7 +777,7 @@ function App() {
       `Due this week: ${summaries.dueSoon.length}`,
       `Overdue: ${summaries.overdue.length}`,
       `Open: ${summaries.statusCounts.open || 0}`,
-      `Changed since recovery baseline: ${changedRows.length}`,
+      `Changed today: ${changedTodayRows.length}`,
       '',
       '## Current Inventory By SKU',
       '| SKU | Bins | Active | Open | Due Soon | Overdue | Estimated Animals | Freezer On Hand |',
@@ -642,7 +787,12 @@ function App() {
       '## Operator Actions',
       ...operatorActions.map((action) => `- ${action.title}: ${action.detail}`),
       '',
-      '## Changed Since Recovery Baseline',
+      '## Changed Today',
+      ...(changedTodayRows.length
+        ? changedTodayRows.slice(0, 50).map((row) => `- ${row.bin} (${row.room}/${row.rack}): ${row.lastEvent || 'Flow update'}`)
+        : ['- No bins have been saved today.']),
+      '',
+      '## Recovery Baseline Delta',
       ...(changedRows.length
         ? changedRows.slice(0, 50).map((row) => `- ${row.bin} (${row.room}/${row.rack}): ${row.changes.map((change) => `${change.field} ${change.before || 'blank'} -> ${change.after || 'blank'}`).join('; ')}`)
         : ['- No row-level changes detected against the recovered June 18 CSV.']),
@@ -724,6 +874,7 @@ function App() {
         open_bins: summaries.statusCounts.open || 0,
         due_this_week: summaries.dueSoon.length,
         overdue: summaries.overdue.length,
+        changed_today: changedTodayRows.length,
         changed_since_recovery_baseline: changedRows.length,
       },
       graph: {
@@ -745,6 +896,14 @@ function App() {
         updated_at: row.updatedAt || null,
       })),
       inventory_by_sku: skuInventory,
+      changed_today: changedTodayRows.map((row) => ({
+        bin: row.bin,
+        room: row.room,
+        rack: row.rack,
+        status: row.status,
+        sku: row.sku,
+        updated_at: row.updatedAt,
+      })),
       operator_actions: operatorActions.map((action) => ({
         id: action.id,
         tone: action.tone,
@@ -793,6 +952,15 @@ function App() {
   async function saveSelectedBin(event) {
     event.preventDefault();
     if (!selected || !draft) return;
+    if (!remoteRecord?.payload?.bins || syncState.status !== 'live') {
+      setSyncState({
+        status: 'offline',
+        label: 'Save blocked',
+        detail: 'Shared Flow state is not connected. Refresh before saving.',
+      });
+      showToast('Shared Flow is offline; refresh before saving');
+      return;
+    }
     if (getDraftChanges(selected, draft).length === 0) {
       showToast('No bin changes to save');
       return;
@@ -811,6 +979,7 @@ function App() {
       sku: draft.sku,
       dueDate: draft.dueDate,
       birthDate: draft.birthDate,
+      growoutStart: draft.growoutStart,
       mothers: toNumber(draft.mothers),
       ratsPerLitter: toNumber(draft.ratsPerLitter),
       pregnantFemales: toNumber(draft.pregnantFemales),
@@ -820,21 +989,6 @@ function App() {
     };
 
     setSaving(true);
-
-    if (!remoteRecord?.payload?.bins) {
-      setRows((current) => current.map((row) => (row.bin === selected.bin ? nextRow : row)));
-      setDraftDirty(false);
-      setWriteConfirmed(false);
-      draftSourceRef.current = { bin: selected.bin, updatedAt: nextRow.updatedAt || '' };
-      setSaving(false);
-      setSyncState({
-        status: 'offline',
-        label: 'Local fallback',
-        detail: 'No shared payload loaded; edit kept in this browser session.',
-      });
-      showToast('Saved locally in this browser');
-      return;
-    }
 
     try {
       const latestRecord = await flowApi('/state');
@@ -853,6 +1007,7 @@ function App() {
         note: nextRow.note,
         dueDate: nextRow.dueDate || null,
         birthDate: nextRow.birthDate || null,
+        growoutStartDate: nextRow.growoutStart || null,
         mothers: nextRow.mothers,
         litterCount: nextRow.ratsPerLitter,
         pregnantFemales: nextRow.pregnantFemales,
@@ -913,14 +1068,25 @@ function App() {
         </div>
 
         <nav className="nav">
-          <button className="active" type="button" onClick={resetFlow}><LayoutDashboard size={20} /> Dashboard</button>
-          <button type="button" onClick={() => selectRoom('all')}><Building2 size={20} /> Rooms</button>
+          <div className="nav-label"><MapPinned size={20} /> Floor Board</div>
           <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
         </nav>
 
-        <div className="nav-lower">
-          <button type="button"><Bell size={20} /> Alerts <span>{summaries.overdue.length}</span></button>
-          <button type="button"><ClipboardList size={20} /> Tasks <span>{summaries.dueSoon.length}</span></button>
+        <div className="nav-lower" aria-label="Current work queues">
+          <button
+            className={classNames(activeWorkQueue === 'alerts' && 'active')}
+            type="button"
+            onClick={() => selectWorkQueue(activeWorkQueue === 'alerts' ? 'all' : 'alerts')}
+          >
+            <Bell size={20} /> Needs Check <span>{summaries.overdue.length}</span>
+          </button>
+          <button
+            className={classNames(activeWorkQueue === 'tasks' && 'active')}
+            type="button"
+            onClick={() => selectWorkQueue(activeWorkQueue === 'tasks' ? 'all' : 'tasks')}
+          >
+            <ClipboardList size={20} /> Due Soon <span>{summaries.dueSoon.length}</span>
+          </button>
         </div>
 
         <section className="hq-card">
@@ -939,15 +1105,15 @@ function App() {
             <input
               ref={searchRef}
               data-testid="bin-search"
-              aria-label="Search bins, SKUs, rooms, racks, QR codes"
-              placeholder="Search bins, SKUs, rooms, racks, QR codes..."
+              aria-label="Search bins, SKUs, rooms, racks, notes"
+              placeholder="Search bins, SKUs, rooms, racks, notes..."
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             <kbd>/</kbd>
           </form>
           <div className="top-meta">
-            <strong>June 20, 2026</strong>
+            <strong>{TODAY_LABEL}</strong>
             <button type="button" onClick={refreshSharedState}>
               {syncState.status === 'connecting' ? <Loader2 className="spin" size={17} /> : <Wifi size={17} />}
               {syncState.label}
@@ -955,17 +1121,38 @@ function App() {
           </div>
         </header>
 
+        {query.trim() && (
+          <section className="search-results" aria-label="Search results">
+            <strong>{searchMatches.length} match{searchMatches.length === 1 ? '' : 'es'}</strong>
+            {searchMatches.length ? (
+              searchMatches.slice(0, 6).map((row) => (
+                <button
+                  className={classNames(selected.bin === row.bin && 'selected')}
+                  key={row.bin}
+                  type="button"
+                  onClick={() => selectBin(row)}
+                >
+                  <span>{row.bin}</span>
+                  <small>{getWorkflow(row).label} / {row.rack} / {row.sku}</small>
+                </button>
+              ))
+            ) : (
+              <p>No bin, SKU, room, rack, or note match.</p>
+            )}
+          </section>
+        )}
+
         <section className="actions-row">
           <button type="button" data-testid="daily-report-action" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
           <button type="button" data-testid="okf-export-action" onClick={downloadOkfBundle}><FileText size={17} /> OKF Bundle</button>
-          <button type="button" data-testid="scan-bin-action" onClick={beginQuickScan}><ScanLine size={17} /> Scan Bin</button>
+          <button type="button" data-testid="scan-bin-action" onClick={beginQuickScan}><ScanLine size={17} /> Find Bin</button>
         </section>
 
         {scanMode && (
-          <section className="scan-tray" aria-label="Scan Mode" data-testid="scan-tray">
+          <section className="scan-tray" aria-label="Find Bin Mode" data-testid="scan-tray">
             <div>
-              <strong>Scan Mode</strong>
-              <span>Type or scan a bin code, then press Enter. Current bin: {selected.bin}</span>
+              <strong>Find Bin Mode</strong>
+              <span>Ready for bin code. Current bin: {selected.bin}</span>
             </div>
             <button type="button" onClick={beginQuickScan}><ScanLine size={16} /> Focus scanner</button>
             {operatorActions[1]?.rows?.[0] && (
@@ -983,18 +1170,13 @@ function App() {
           <Metric label="Due This Week" value={summaries.dueSoon.length} detail="needs eyes" tone="amber" />
           <Metric label="Overdue" value={summaries.overdue.length} detail="check first" tone="red" />
           <Metric label="Open" value={summaries.statusCounts.open || 0} detail="available bins" />
-          <Metric label="Changed" value={changedRows.length} detail="vs Jun 18 CSV" tone="violet" />
+          <Metric label="Changed Today" value={changedTodayRows.length} detail="saved today" tone="violet" />
         </section>
 
         <section className="dashboard-grid">
           <aside className="room-list">
             <div className="panel-head">
               <h2>Rooms & Racks</h2>
-              <button type="button" className="icon-button"><ChevronDown size={18} /></button>
-            </div>
-            <div className="mini-search">
-              <Search size={15} />
-              <input placeholder="Search rooms or racks..." value={query} onChange={(event) => setQuery(event.target.value)} />
             </div>
             <RoomButton label="All rooms" count={rows.length} selected={activeRoom === 'all'} onClick={() => selectRoom('all')} />
             {ROOMS.filter((room) => room !== 'all').map((room) => (
@@ -1025,6 +1207,7 @@ function App() {
               <div>
                 <h2>Bin Map</h2>
                 <p>{mapRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
+                {activeWorkQueue !== 'all' && <p>{WORK_QUEUES[activeWorkQueue].label}</p>}
               </div>
             </div>
             <div className="filter-row">
@@ -1060,6 +1243,8 @@ function App() {
                   rack={rack}
                   rows={rackRows}
                   selectedBin={selected.bin}
+                  searchMatchBins={searchMatchBins}
+                  hasSearch={Boolean(query.trim())}
                   onSelect={selectBin}
                 />
               ))}
@@ -1075,7 +1260,7 @@ function App() {
 
           <aside className="insight-panel">
             <div className="panel-head">
-              <h2>Flow Intelligence</h2>
+              <h2>Today's Floor Queue</h2>
               <Sparkles size={18} />
             </div>
             {operatorActions.map((action) => (
@@ -1126,6 +1311,7 @@ function App() {
         setWriteConfirmed={setWriteConfirmed}
         onSave={saveSelectedBin}
         saving={saving}
+        canWriteShared={syncState.status === 'live' && Boolean(remoteRecord?.payload?.bins)}
       />
 
       {toast && <div className="toast">{toast}</div>}
@@ -1152,7 +1338,7 @@ function RoomButton({ label, count, selected, onClick }) {
   );
 }
 
-function RackColumn({ rack, rows, selectedBin, onSelect }) {
+function RackColumn({ rack, rows, selectedBin, searchMatchBins, hasSearch, onSelect }) {
   const counts = countBy(rows, 'status');
   return (
     <section className="rack-column">
@@ -1166,17 +1352,26 @@ function RackColumn({ rack, rows, selectedBin, onSelect }) {
       <div className="bin-grid">
         {rows.map((row) => {
           const activity = getRowActivity(row);
+          const workflow = getWorkflow(row);
+          const meta = getBinCardMeta(row);
           return (
             <button
-              className={classNames('bin-cell', row.status, activity.key, selectedBin === row.bin && 'active')}
+              className={classNames(
+                'bin-cell',
+                row.status,
+                activity.key,
+                hasSearch && searchMatchBins.has(row.bin) && 'search-hit',
+                selectedBin === row.bin && 'active',
+              )}
               key={row.bin}
               type="button"
               onClick={() => onSelect(row)}
               title={`${row.bin} - ${activity.label} - ${row.status} - ${row.sku}`}
             >
-              <QrCode size={13} />
               <strong>{row.bin.split('-').at(-1)}</strong>
-              <span>{activity.key === 'ready' ? 'ready' : activity.label}</span>
+              <span>{workflow.label}</span>
+              <small>{meta.primary}</small>
+              <em>{getCardSignal(activity, meta)}</em>
             </button>
           );
         })}
@@ -1195,13 +1390,88 @@ function BinDetail({
   setWriteConfirmed,
   onSave,
   saving,
+  canWriteShared,
 }) {
   const due = daysUntil(selected.dueDate);
   const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
+  const workflow = getWorkflow(selected);
+  const meta = getBinCardMeta(selected);
 
   function updateDraft(field, value) {
     onDraftDirty();
     setDraft((current) => ({ ...(current || {}), [field]: value }));
+  }
+
+  function renderField(field) {
+    if (field === 'status') {
+      return (
+        <label key={field}>
+          Status
+          <select value={draft?.status || selected.status} onChange={(event) => updateDraft('status', event.target.value)}>
+            {STATUS_ORDER.map((status) => <option key={status} value={status}>{STATUS_COPY[status]}</option>)}
+          </select>
+        </label>
+      );
+    }
+    if (field === 'sku') {
+      return (
+        <label key={field}>
+          SKU target
+          <select value={draft?.sku || selected.sku} onChange={(event) => updateDraft('sku', event.target.value)}>
+            {SKU_OPTIONS.map((sku) => <option key={sku} value={sku}>{sku}</option>)}
+          </select>
+        </label>
+      );
+    }
+    if (field === 'dueDate') {
+      return (
+        <label key={field}>
+          Due date
+          <input type="date" value={draft?.dueDate || ''} onChange={(event) => updateDraft('dueDate', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'birthDate') {
+      return (
+        <label key={field}>
+          Birth date
+          <input type="date" value={draft?.birthDate || ''} onChange={(event) => updateDraft('birthDate', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'growoutStart') {
+      return (
+        <label key={field}>
+          Growout start
+          <input type="date" value={draft?.growoutStart || ''} onChange={(event) => updateDraft('growoutStart', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'mothers') {
+      return (
+        <label key={field}>
+          Mothers
+          <input type="number" min="0" value={draft?.mothers ?? 0} onChange={(event) => updateDraft('mothers', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'ratsPerLitter') {
+      return (
+        <label key={field}>
+          Pups / count
+          <input type="number" min="0" value={draft?.ratsPerLitter ?? 0} onChange={(event) => updateDraft('ratsPerLitter', event.target.value)} />
+        </label>
+      );
+    }
+    if (field === 'pregnantFemales') {
+      return (
+        <label key={field}>
+          Pregnant
+          <input type="number" min="0" value={draft?.pregnantFemales ?? 0} onChange={(event) => updateDraft('pregnantFemales', event.target.value)} />
+        </label>
+      );
+    }
+    return null;
   }
 
   return (
@@ -1212,40 +1482,24 @@ function BinDetail({
           <h2>{selected.bin}</h2>
           <p>{selected.room} / {selected.rack} / {selected.type}</p>
         </div>
-        <button className="icon-button" type="button" aria-label="Selected bin"><QrCode size={21} /></button>
+        <span className="detail-icon" aria-hidden="true"><MapPinned size={21} /></span>
       </div>
 
       <div className={`status-pill ${selected.status}`}>{STATUS_COPY[selected.status] || selected.status}</div>
 
+      <section className="workflow-card">
+        <div>
+          <strong>{workflow.label}</strong>
+          <span>{workflow.detail}</span>
+        </div>
+        <dl>
+          <div><dt>{workflow.cardLabel}</dt><dd>{meta.primary}</dd></div>
+          <div><dt>Signal</dt><dd>{meta.secondary}</dd></div>
+        </dl>
+      </section>
+
       <form className="edit-form" onSubmit={onSave}>
-        <label>
-          Status
-          <select value={draft?.status || selected.status} onChange={(event) => updateDraft('status', event.target.value)}>
-            {STATUS_ORDER.map((status) => <option key={status} value={status}>{STATUS_COPY[status]}</option>)}
-          </select>
-        </label>
-        <label>
-          SKU
-          <select value={draft?.sku || selected.sku} onChange={(event) => updateDraft('sku', event.target.value)}>
-            {SKU_OPTIONS.map((sku) => <option key={sku} value={sku}>{sku}</option>)}
-          </select>
-        </label>
-        <label>
-          Due date
-          <input type="date" value={draft?.dueDate || ''} onChange={(event) => updateDraft('dueDate', event.target.value)} />
-        </label>
-        <label>
-          Birth date
-          <input type="date" value={draft?.birthDate || ''} onChange={(event) => updateDraft('birthDate', event.target.value)} />
-        </label>
-        <label>
-          Mothers
-          <input type="number" min="0" value={draft?.mothers ?? 0} onChange={(event) => updateDraft('mothers', event.target.value)} />
-        </label>
-        <label>
-          Rats / litter
-          <input type="number" min="0" value={draft?.ratsPerLitter ?? 0} onChange={(event) => updateDraft('ratsPerLitter', event.target.value)} />
-        </label>
+        {workflow.primaryFields.map(renderField)}
         <label className="wide">
           Floor note
           <textarea rows="3" value={draft?.note || ''} onChange={(event) => updateDraft('note', event.target.value)} />
@@ -1273,13 +1527,14 @@ function BinDetail({
           <input
             type="checkbox"
             checked={writeConfirmed}
+            disabled={!canWriteShared}
             onChange={(event) => setWriteConfirmed(event.target.checked)}
           />
           <span>Confirm this updates Frostbite Flow shared state.</span>
         </label>
-        <button className="save-button" type="submit" disabled={saving || draftChanges.length === 0 || !writeConfirmed}>
+        <button className="save-button" type="submit" disabled={saving || !canWriteShared || draftChanges.length === 0 || !writeConfirmed}>
           {saving ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
-          {saving ? 'Saving...' : 'Save shared state'}
+          {saving ? 'Saving...' : canWriteShared ? 'Save shared state' : 'Shared state offline'}
         </button>
       </form>
 
@@ -1293,7 +1548,7 @@ function BinDetail({
       <section className="qr-card">
         <MapPinned size={18} />
         <div>
-          <strong>QR target</strong>
+          <strong>Bin link</strong>
           <code>{selected.qrTarget}</code>
         </div>
       </section>
