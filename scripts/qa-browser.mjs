@@ -21,8 +21,29 @@ const mobileDrySaveNote = 'QA mobile scan dry-run from browser test';
 const openTransitionNote = 'QA open transition dry-run';
 const desktopActualCount = 22;
 const mobileActualCount = 12;
+const desktopEditBin = '55-1-02';
 const mobileEditBin = 'B1-01';
 let flowStateSnapshot = null;
+
+function assertCleanStartState(record) {
+  const bins = Object.values(record.payload?.bins || {});
+  if (bins.length !== 714) {
+    throw new Error(`Clean-start state expected 714 bins, got ${bins.length}`);
+  }
+  const activeBins = bins.filter((bin) => bin.status !== 'open');
+  const datedBins = bins.filter((bin) => bin.dueDate || bin.birthDate || bin.growoutStartDate);
+  const updatedBins = bins.filter((bin) => bin.updatedAt);
+  const countedBins = bins.filter((bin) => Number(bin.actualCount || 0) !== 0 || Number(bin.currentCount || 0) !== 0);
+  const motherSlotBins = bins.filter((bin) => Number(bin.motherSlots || 0) !== 0);
+  const activeVacationMotherBins = bins.filter((bin) => Number(bin.activeVacationMothers || 0) !== 0);
+  const notedBins = bins.filter((bin) => bin.note);
+  const eventBins = bins.filter((bin) => (bin.events?.length || 0) !== 0);
+  if (activeBins.length || datedBins.length || updatedBins.length || countedBins.length || motherSlotBins.length || activeVacationMotherBins.length || notedBins.length || eventBins.length) {
+    throw new Error(
+      `Expected empty Flow start, got active=${activeBins.length} dated=${datedBins.length} updated=${updatedBins.length} counted=${countedBins.length} motherSlots=${motherSlotBins.length} activeVacationMothers=${activeVacationMotherBins.length} notes=${notedBins.length} events=${eventBins.length}`,
+    );
+  }
+}
 
 function assertDryRunWrite({ write, originalBins, binCode, note, actualCount, status, skuTarget, expectOpenCleared = false }) {
   if (write.body?.updated_by !== 'frostbite-flow-dashboard') {
@@ -159,20 +180,17 @@ async function main() {
   const okfPath = await okfDownload.path();
   const okfBundle = JSON.parse(readFileSync(okfPath, 'utf8'));
 
-  await desktop.fill(searchInput, 'Pup target');
+  assertCleanStartState(stateJson);
+
+  await desktop.fill(searchInput, mobileEditBin);
   await desktop.waitForTimeout(300);
   const generalSearchSelectedBin = await desktop.locator('.detail-title h2').textContent();
   const searchResultsText = await desktop.locator('.search-results').innerText();
 
-  await desktop.fill(searchInput, 'B1-01');
+  await desktop.fill(searchInput, mobileEditBin);
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
-  const breedingDetailText = await desktop.locator('.detail-panel').innerText();
-
-  await desktop.fill(searchInput, 'G1-01');
-  await desktop.press(searchInput, 'Enter');
-  await desktop.waitForTimeout(300);
-  const growoutDetailText = await desktop.locator('.detail-panel').innerText();
+  const mobileBinOpenDetailText = await desktop.locator('.detail-panel').innerText();
 
   await desktop.fill(searchInput, '10-1-03');
   await desktop.press(searchInput, 'Enter');
@@ -190,9 +208,10 @@ async function main() {
   const firstCanonicalBin = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(0).getAttribute('data-bin-code');
   await desktop.locator('.control-group[aria-label="Map mode"] button', { hasText: 'Rack Map' }).click();
 
-  await desktop.fill(searchInput, '55-1-02');
+  await desktop.fill(searchInput, desktopEditBin);
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
+  await desktop.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('nursery');
   await desktop.getByLabel('Actual count').fill(String(desktopActualCount));
   await desktop.locator('.edit-form textarea').fill(drySaveNote);
   const writePreview = await desktop.locator('.change-preview').innerText();
@@ -214,7 +233,7 @@ async function main() {
     await desktop.waitForTimeout(100);
   }
 
-  await desktop.fill(searchInput, '55-1-02');
+  await desktop.fill(searchInput, desktopEditBin);
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
 
@@ -241,6 +260,7 @@ async function main() {
   await mobile.fill(searchInput, mobileEditBin);
   await mobile.press(searchInput, 'Enter');
   await mobile.waitForTimeout(300);
+  await mobile.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('breeding');
   await mobile.getByLabel('Actual count').fill(String(mobileActualCount));
   await mobile.locator('.edit-form textarea').fill(mobileDrySaveNote);
   await mobile.locator('.write-confirm input').check();
@@ -266,8 +286,7 @@ async function main() {
     scanModeText,
     mobileScanModeText,
     searchResultsText,
-    breedingDetailText,
-    growoutDetailText,
+    mobileBinOpenDetailText,
     openDetailText,
     wallCells,
     firstSlot,
@@ -317,17 +336,12 @@ async function main() {
   if (!mobileScanModeText.includes('Find Bin Mode') || !mobileScanModeText.includes('Current bin')) {
     throw new Error(`Mobile Find Bin tray did not render expected text: ${mobileScanModeText}`);
   }
-  if (!searchResultsText.includes('55-1-03')) {
-    throw new Error(`Search results did not show expected Pup match: ${searchResultsText}`);
+  if (!searchResultsText.includes(mobileEditBin)) {
+    throw new Error(`Search results did not show expected bin match: ${searchResultsText}`);
   }
-  for (const expected of ['Breeding', 'ACTUAL', '8 in bin', 'MALES', 'FEMALES']) {
-    if (!breedingDetailText.includes(expected)) {
-      throw new Error(`Breeding detail missing ${expected}: ${breedingDetailText}`);
-    }
-  }
-  for (const expected of ['Growout', 'ACTUAL', '42 in bin', 'SOURCE BIN']) {
-    if (!growoutDetailText.includes(expected)) {
-      throw new Error(`Growout detail missing ${expected}: ${growoutDetailText}`);
+  for (const expected of ['Open', 'Available bin capacity', 'ACTUAL', '0 in bin']) {
+    if (!mobileBinOpenDetailText.includes(expected)) {
+      throw new Error(`Clean-start bin detail missing ${expected}: ${mobileBinOpenDetailText}`);
     }
   }
   for (const expected of ['Open', 'Available bin capacity', 'ACTUAL', '0 in bin']) {
@@ -351,8 +365,8 @@ async function main() {
   if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note') || !writePreview.includes('Actual count')) {
     throw new Error(`Save preview did not show the changed note: ${writePreview}`);
   }
-  if (!openTransitionPreview.includes('Status') || !openTransitionPreview.includes('open') || !openTransitionPreview.includes('No SKU') || !openTransitionPreview.includes('Actual count') || !openTransitionPreview.includes('Birth date')) {
-    throw new Error(`Open transition preview did not show status/SKU/count changes: ${openTransitionPreview}`);
+  if (!openTransitionPreview.includes('Shared write preview') || !openTransitionPreview.includes('Floor note')) {
+    throw new Error(`Open transition preview did not show note-only clean-start write: ${openTransitionPreview}`);
   }
   if (visibleShopifyUi > 0) {
     throw new Error('Visible Shopify workflow copy should not be present in the operator UI');
@@ -374,11 +388,14 @@ async function main() {
   if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
     throw new Error('OKF per-bin inventory is missing numeric actual_count values');
   }
-  const b101 = okfBundle.per_bin_inventory.find((row) => row.bin === 'B1-01');
+  if (!okfBundle.per_bin_inventory.every((row) => Number(row.mothers || 0) === 0 && Number(row.rats_per_litter || 0) === 0)) {
+    throw new Error('OKF per-bin inventory leaked clean-start nursery count fields');
+  }
+  const b101 = okfBundle.per_bin_inventory.find((row) => row.bin === mobileEditBin);
   const g101 = okfBundle.per_bin_inventory.find((row) => row.bin === 'G1-01');
   const open100103 = okfBundle.per_bin_inventory.find((row) => row.bin === '10-1-03');
-  if (b101?.actual_count !== 8) throw new Error(`Expected B1-01 actual_count 8, got ${b101?.actual_count}`);
-  if (g101?.actual_count !== 42) throw new Error(`Expected G1-01 actual_count 42, got ${g101?.actual_count}`);
+  if (b101?.actual_count !== 0) throw new Error(`Expected ${mobileEditBin} clean-start actual_count 0, got ${b101?.actual_count}`);
+  if (g101?.actual_count !== 0) throw new Error(`Expected G1-01 clean-start actual_count 0, got ${g101?.actual_count}`);
   if (open100103?.actual_count !== 0) throw new Error(`Expected 10-1-03 open actual_count 0, got ${open100103?.actual_count}`);
   if ((okfBundle.graph?.nodes?.length || 0) < 714 || (okfBundle.graph?.edges?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected room/rack/bin/SKU nodes or edges');
@@ -399,7 +416,14 @@ async function main() {
     throw new Error(`Expected three dry-run save writes, got ${interceptedWrites.length}`);
   }
   const originalBins = stateJson.payload?.bins || {};
-  assertDryRunWrite({ write: interceptedWrites[0], originalBins, binCode: '55-1-02', note: drySaveNote, actualCount: desktopActualCount });
+  assertDryRunWrite({
+    write: interceptedWrites[0],
+    originalBins,
+    binCode: desktopEditBin,
+    note: drySaveNote,
+    actualCount: desktopActualCount,
+    status: 'nursery',
+  });
   assertDryRunWrite({
     write: interceptedWrites[1],
     originalBins,
@@ -410,7 +434,14 @@ async function main() {
     skuTarget: null,
     expectOpenCleared: true,
   });
-  assertDryRunWrite({ write: interceptedWrites[2], originalBins, binCode: mobileEditBin, note: mobileDrySaveNote, actualCount: mobileActualCount });
+  assertDryRunWrite({
+    write: interceptedWrites[2],
+    originalBins,
+    binCode: mobileEditBin,
+    note: mobileDrySaveNote,
+    actualCount: mobileActualCount,
+    status: 'breeding',
+  });
   const shopifyRequests = seenRequests.filter((request) => request.url.toLowerCase().includes('shopify'));
   if (shopifyRequests.length > 0) {
     throw new Error(`Unexpected Shopify request(s): ${shopifyRequests.map((request) => `${request.method} ${request.url}`).join(', ')}`);
@@ -421,14 +452,14 @@ async function main() {
   if (heading !== 'Frostbite Flow') {
     throw new Error(`Unexpected app heading: ${heading}`);
   }
-  if (generalSearchSelectedBin !== '55-1-03') {
-    throw new Error(`General search selected ${generalSearchSelectedBin}, expected 55-1-03`);
+  if (generalSearchSelectedBin !== mobileEditBin) {
+    throw new Error(`General search selected ${generalSearchSelectedBin}, expected ${mobileEditBin}`);
   }
-  if (selectedBin !== '55-1-02') {
-    throw new Error(`QR lookup selected ${selectedBin}, expected 55-1-02`);
+  if (selectedBin !== desktopEditBin) {
+    throw new Error(`QR lookup selected ${selectedBin}, expected ${desktopEditBin}`);
   }
-  if (!qrTarget?.endsWith('#55-1-02')) {
-    throw new Error(`QR target did not resolve to #55-1-02: ${qrTarget}`);
+  if (!qrTarget?.endsWith(`#${desktopEditBin}`)) {
+    throw new Error(`QR target did not resolve to #${desktopEditBin}: ${qrTarget}`);
   }
   if (mobileSelectedBin !== mobileEditBin) {
     throw new Error(`Mobile hash selected ${mobileSelectedBin}, expected ${mobileEditBin}`);

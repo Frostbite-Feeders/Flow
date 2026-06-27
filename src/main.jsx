@@ -399,6 +399,8 @@ function rowToRaw(row) {
     Males: String(row.males ?? 0),
     Females: String(row.females ?? 0),
     Mothers: String(row.mothers ?? 0),
+    'Mother Slots': String(row.motherSlots ?? 0),
+    'Active Vacation Mothers': String(row.activeVacationMothers ?? 0),
     'Pregnant Females': String(row.pregnantFemales ?? 0),
     'Rats/Litter': String(row.ratsPerLitter ?? 0),
     'Due Date': row.dueDate || '',
@@ -429,44 +431,50 @@ function mergeSharedState(rows, payload) {
   const apiBins = Object.values(payload?.bins || {});
   if (!apiBins.length) return rows;
   const byCode = new Map(apiBins.map((bin) => [bin.code, bin]));
+  const remoteValue = (remote, field, fallback) => (
+    Object.prototype.hasOwnProperty.call(remote, field) ? remote[field] : fallback
+  );
 
   return rows.map((row) => {
     const remote = byCode.get(row.bin);
     if (!remote) return row;
-    const nextStatus = remote.status || row.status;
-    const nextRoom = remote.room || row.room;
+    const nextStatus = remoteValue(remote, 'status', row.status) || 'open';
+    const nextRoom = remoteValue(remote, 'room', row.room) || row.room;
+    const remoteNote = remoteValue(remote, 'note', row.note);
+    const remoteEvents = remoteValue(remote, 'events', undefined);
     return {
       ...row,
-      apiId: remote.id || row.apiId,
+      apiId: remoteValue(remote, 'id', row.apiId) || row.apiId,
       room: nextRoom,
-      rack: remote.rackLabel || row.rack,
-      type: remote.type || row.type,
+      rack: remoteValue(remote, 'rackLabel', row.rack) || row.rack,
+      type: remoteValue(remote, 'type', row.type) || row.type,
       status: nextStatus,
-      sku: nextStatus === 'open' ? 'No SKU' : TARGET_TO_SKU[remote.skuTarget] || row.sku,
+      sku: nextStatus === 'open' ? 'No SKU' : TARGET_TO_SKU[remoteValue(remote, 'skuTarget', null)] || row.sku,
       actualCount: deriveActualCount({
         ...row,
         status: nextStatus,
         room: nextRoom,
-        actualCount: remote.actualCount,
-        currentCount: remote.currentCount,
-        males: remote.males ?? row.males,
-        females: remote.females ?? row.females,
-        mothers: remote.mothers ?? row.mothers,
-        ratsPerLitter: remote.litterCount ?? row.ratsPerLitter,
+        actualCount: remoteValue(remote, 'actualCount', row.actualCount),
+        currentCount: remoteValue(remote, 'currentCount', row.actualCount),
+        males: remoteValue(remote, 'males', row.males),
+        females: remoteValue(remote, 'females', row.females),
+        mothers: remoteValue(remote, 'mothers', row.mothers),
+        ratsPerLitter: remoteValue(remote, 'litterCount', row.ratsPerLitter),
       }),
-      males: toNumber(remote.males ?? row.males),
-      females: toNumber(remote.females ?? row.females),
-      pregnantFemales: toNumber(remote.pregnantFemales ?? row.pregnantFemales),
-      mothers: toNumber(remote.mothers ?? row.mothers),
-      motherSlots: toNumber(remote.motherSlots ?? row.motherSlots),
-      ratsPerLitter: toNumber(remote.litterCount ?? row.ratsPerLitter),
-      dueDate: remote.dueDate || '',
-      birthDate: remote.birthDate || '',
-      growoutStart: remote.growoutStartDate || '',
-      sourceBin: remote.sourceBin || '',
-      note: remote.note || '',
-      updatedAt: remote.updatedAt || row.updatedAt,
-      lastEvent: remote.events?.at?.(-1)?.title || row.lastEvent,
+      males: toNumber(remoteValue(remote, 'males', row.males)),
+      females: toNumber(remoteValue(remote, 'females', row.females)),
+      pregnantFemales: toNumber(remoteValue(remote, 'pregnantFemales', row.pregnantFemales)),
+      mothers: toNumber(remoteValue(remote, 'mothers', row.mothers)),
+      motherSlots: toNumber(remoteValue(remote, 'motherSlots', row.motherSlots)),
+      activeVacationMothers: toNumber(remoteValue(remote, 'activeVacationMothers', row.activeVacationMothers)),
+      ratsPerLitter: toNumber(remoteValue(remote, 'litterCount', row.ratsPerLitter)),
+      dueDate: remoteValue(remote, 'dueDate', row.dueDate) || '',
+      birthDate: remoteValue(remote, 'birthDate', row.birthDate) || '',
+      growoutStart: remoteValue(remote, 'growoutStartDate', row.growoutStart) || '',
+      sourceBin: remoteValue(remote, 'sourceBin', row.sourceBin) || '',
+      note: remoteNote || '',
+      updatedAt: remoteValue(remote, 'updatedAt', row.updatedAt) || '',
+      lastEvent: Array.isArray(remoteEvents) ? remoteEvents.at(-1)?.title || '' : row.lastEvent,
     };
   });
 }

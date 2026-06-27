@@ -20,6 +20,26 @@ const interceptedWrites = [];
 const exercisedControls = [];
 let firstStateSnapshot = null;
 
+function assertCleanStartState(record) {
+  const bins = Object.values(record.payload?.bins || {});
+  if (bins.length !== 714) {
+    throw new Error(`Clean-start state expected 714 bins, got ${bins.length}`);
+  }
+  const activeBins = bins.filter((bin) => bin.status !== 'open');
+  const datedBins = bins.filter((bin) => bin.dueDate || bin.birthDate || bin.growoutStartDate);
+  const updatedBins = bins.filter((bin) => bin.updatedAt);
+  const countedBins = bins.filter((bin) => Number(bin.actualCount || 0) !== 0 || Number(bin.currentCount || 0) !== 0);
+  const motherSlotBins = bins.filter((bin) => Number(bin.motherSlots || 0) !== 0);
+  const activeVacationMotherBins = bins.filter((bin) => Number(bin.activeVacationMothers || 0) !== 0);
+  const notedBins = bins.filter((bin) => bin.note);
+  const eventBins = bins.filter((bin) => (bin.events?.length || 0) !== 0);
+  if (activeBins.length || datedBins.length || updatedBins.length || countedBins.length || motherSlotBins.length || activeVacationMotherBins.length || notedBins.length || eventBins.length) {
+    throw new Error(
+      `Expected empty Flow start, got active=${activeBins.length} dated=${datedBins.length} updated=${updatedBins.length} counted=${countedBins.length} motherSlots=${motherSlotBins.length} activeVacationMothers=${activeVacationMotherBins.length} notes=${notedBins.length} events=${eventBins.length}`,
+    );
+  }
+}
+
 function assertSameOrigin(url) {
   return url === 'about:blank' || new URL(url).origin === appOrigin;
 }
@@ -121,7 +141,9 @@ async function main() {
   await page.goto(appUrl, { waitUntil: 'networkidle' });
   const stateResponse = await stateResponsePromise;
   firstStateSnapshot = await stateResponse.json();
+  assertCleanStartState(firstStateSnapshot);
   await page.locator('text=Shared live').first().waitFor({ timeout: 10000 });
+  const initialMetrics = await page.locator('.metric-strip').innerText();
 
   async function clickControl(label, action) {
     await action();
@@ -226,6 +248,7 @@ async function main() {
   await page.fill(searchInput, deployEditBin);
   await page.press(searchInput, 'Enter');
   await page.waitForTimeout(300);
+  await page.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('breeding');
   await page.getByLabel('Actual count').fill(String(deployActualCount));
   await page.locator('.edit-form textarea').fill(drySaveNote);
   exercisedControls.push('Floor note edit');
@@ -264,8 +287,9 @@ async function main() {
     appUrl,
     stateId: firstStateSnapshot.id,
     stateBinCount: Object.keys(firstStateSnapshot.payload?.bins || {}).length,
+    initialMetrics,
     selectedBeforeSave,
-    metrics,
+    postDryRunMetrics: metrics,
     searchResultsText,
     reportFilename: dailyReportDownload.suggestedFilename(),
     okfFilename: okfDownload.suggestedFilename(),
@@ -290,12 +314,18 @@ async function main() {
   if (selectedBeforeSave !== deployEditBin) throw new Error(`Expected selected bin ${deployEditBin}, got ${selectedBeforeSave}`);
   if (!searchResultsText.includes(deployEditBin)) throw new Error(`Search results did not show selected bin: ${searchResultsText}`);
   if (interceptedWrites.length !== 2) throw new Error(`Expected two intercepted Flow writes, got ${interceptedWrites.length}`);
+  for (const expected of ['Total Bins', '714', 'Active', '0', 'Due This Week', '0', 'Overdue', '0', 'Open', '714', 'Changed Today', '0']) {
+    if (!initialMetrics.includes(expected)) {
+      throw new Error(`Clean-start metrics missing ${expected}: ${initialMetrics}`);
+    }
+  }
   assertDryRunWrite({
     write: interceptedWrites[0],
     originalBins: firstStateSnapshot.payload?.bins || {},
     binCode: deployEditBin,
     note: drySaveNote,
     actualCount: deployActualCount,
+    status: 'breeding',
   });
   assertDryRunWrite({
     write: interceptedWrites[1],
@@ -325,6 +355,9 @@ async function main() {
   }
   if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
     throw new Error('OKF per-bin inventory is missing numeric actual_count values');
+  }
+  if (!okfBundle.per_bin_inventory.every((row) => Number(row.mothers || 0) === 0 && Number(row.rats_per_litter || 0) === 0)) {
+    throw new Error('OKF per-bin inventory leaked clean-start nursery count fields');
   }
   if ((okfBundle.graph?.nodes?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected nodes.');

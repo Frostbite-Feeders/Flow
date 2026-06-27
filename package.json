@@ -11,6 +11,7 @@
     "qa:deploy": "node scripts/qa-deploy.mjs",
     "backup:flow": "powershell -ExecutionPolicy Bypass -File scripts/backup-flow-state.ps1",
     "smoke:flow-write": "node scripts/smoke-live-flow-write.mjs",
+    "reset:empty-start": "node scripts/reset-flow-empty-start.mjs",
     "verify": "powershell -ExecutionPolicy Bypass -File scripts/verify-baseline.ps1 -CheckReadOnlyApi"
   },
   "dependencies": {
