@@ -21,6 +21,7 @@ const mobileDrySaveNote = 'QA mobile scan dry-run from browser test';
 const openTransitionNote = 'QA open transition dry-run';
 const desktopActualCount = 22;
 const mobileActualCount = 12;
+const mobileEditBin = 'B1-01';
 let flowStateSnapshot = null;
 
 function assertDryRunWrite({ write, originalBins, binCode, note, actualCount, status, skuTarget, expectOpenCleared = false }) {
@@ -178,6 +179,17 @@ async function main() {
   await desktop.waitForTimeout(300);
   const openDetailText = await desktop.locator('.detail-panel').innerText();
 
+  await desktop.locator('.control-group[aria-label="Map mode"] button', { hasText: 'Wall Flow' }).click();
+  await desktop.waitForTimeout(300);
+  const firstWallSection = desktop.locator('.wall-section').first();
+  const wallCells = await firstWallSection.locator('[data-testid="wall-walk-cell"]').count();
+  const firstSlot = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(0).getAttribute('data-wall-slot');
+  const twelfthSlot = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(11).getAttribute('data-wall-slot');
+  const thirteenthSlot = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(12).getAttribute('data-wall-slot');
+  const twentyFourthSlot = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(23).getAttribute('data-wall-slot');
+  const firstCanonicalBin = await firstWallSection.locator('[data-testid="wall-walk-cell"]').nth(0).getAttribute('data-bin-code');
+  await desktop.locator('.control-group[aria-label="Map mode"] button', { hasText: 'Rack Map' }).click();
+
   await desktop.fill(searchInput, '55-1-02');
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
@@ -222,11 +234,11 @@ async function main() {
   });
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
   await mobile.route('**/*', allowLocalReadAndDryRunWrite);
-  await mobile.goto(new URL('#10-1-01', localAppUrl).toString(), { waitUntil: 'networkidle' });
+  await mobile.goto(new URL(`#${mobileEditBin}`, localAppUrl).toString(), { waitUntil: 'networkidle' });
   await mobile.click('button:has-text("Find Bin")');
   await mobile.locator('section[aria-label="Find Bin Mode"]').waitFor({ timeout: 5000 });
   const mobileScanModeText = await mobile.locator('section[aria-label="Find Bin Mode"]').innerText();
-  await mobile.fill(searchInput, '10-1-01');
+  await mobile.fill(searchInput, mobileEditBin);
   await mobile.press(searchInput, 'Enter');
   await mobile.waitForTimeout(300);
   await mobile.getByLabel('Actual count').fill(String(mobileActualCount));
@@ -257,6 +269,12 @@ async function main() {
     breedingDetailText,
     growoutDetailText,
     openDetailText,
+    wallCells,
+    firstSlot,
+    twelfthSlot,
+    thirteenthSlot,
+    twentyFourthSlot,
+    firstCanonicalBin,
     writePreview,
     openTransitionPreview,
     binMapText,
@@ -320,6 +338,16 @@ async function main() {
   if (openDetailText.includes('SKU TARGET')) {
     throw new Error(`Open detail should not expose SKU target controls: ${openDetailText}`);
   }
+  if (wallCells !== 120) {
+    throw new Error(`Wall Flow expected 120 cells, got ${wallCells}`);
+  }
+  if (firstSlot !== 'A01') throw new Error(`Expected first Wall Flow slot A01, got ${firstSlot}`);
+  if (twelfthSlot !== 'A12') throw new Error(`Expected twelfth Wall Flow slot A12, got ${twelfthSlot}`);
+  if (thirteenthSlot !== 'B12') throw new Error(`Expected serpentine Wall Flow slot B12 after A12, got ${thirteenthSlot}`);
+  if (twentyFourthSlot !== 'B01') throw new Error(`Expected end of second Wall Flow level B01, got ${twentyFourthSlot}`);
+  if (!firstCanonicalBin || firstCanonicalBin === firstSlot) {
+    throw new Error(`Wall Flow must preserve canonical bin code separately from wall slot. Got ${firstCanonicalBin}`);
+  }
   if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note') || !writePreview.includes('Actual count')) {
     throw new Error(`Save preview did not show the changed note: ${writePreview}`);
   }
@@ -382,7 +410,7 @@ async function main() {
     skuTarget: null,
     expectOpenCleared: true,
   });
-  assertDryRunWrite({ write: interceptedWrites[2], originalBins, binCode: '10-1-01', note: mobileDrySaveNote, actualCount: mobileActualCount });
+  assertDryRunWrite({ write: interceptedWrites[2], originalBins, binCode: mobileEditBin, note: mobileDrySaveNote, actualCount: mobileActualCount });
   const shopifyRequests = seenRequests.filter((request) => request.url.toLowerCase().includes('shopify'));
   if (shopifyRequests.length > 0) {
     throw new Error(`Unexpected Shopify request(s): ${shopifyRequests.map((request) => `${request.method} ${request.url}`).join(', ')}`);
@@ -402,8 +430,8 @@ async function main() {
   if (!qrTarget?.endsWith('#55-1-02')) {
     throw new Error(`QR target did not resolve to #55-1-02: ${qrTarget}`);
   }
-  if (mobileSelectedBin !== '10-1-01') {
-    throw new Error(`Mobile hash selected ${mobileSelectedBin}, expected 10-1-01`);
+  if (mobileSelectedBin !== mobileEditBin) {
+    throw new Error(`Mobile hash selected ${mobileSelectedBin}, expected ${mobileEditBin}`);
   }
 
   console.log(JSON.stringify(result, null, 2));

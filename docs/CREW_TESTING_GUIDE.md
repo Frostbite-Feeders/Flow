@@ -10,6 +10,15 @@ Use this first version as a simple floor tool:
 6. Save shared state.
 7. Export Daily Report at the end of the run.
 
+## Zach Barn Walk Test
+
+- Open `Wall Flow` in the Bin Map.
+- Treat each wall section as one 120-slot walking wall.
+- Slots run `A01` through `A12`, then weave back `B12` through `B01`, then continue down through `J`.
+- The large wall slot is only a walking position. The smaller bin code is the real Flow bin that gets saved.
+- Work a short path first: `A01`, `A02`, `A03`, then `A12`, `B12`, `B11`.
+- For each test bin: confirm the physical bin matches the screen, update actual count or note, save, refresh, and confirm it stayed.
+
 ## Boundaries
 
 - Shopify is read-only and behind the scenes.
@@ -40,6 +49,7 @@ Use a small obvious set before broad floor use:
 
 - Find three bins by typing the bin code.
 - Confirm breeding, nursery, growout, and open bins show different fields.
+- Switch to Wall Flow and confirm the wall slots weave: `A01`, `A12`, `B12`, `B01`.
 - Change an actual count on one test bin and confirm the write preview names that change.
 - Change one harmless floor note and save it.
 - Refresh the browser and confirm the note stayed.

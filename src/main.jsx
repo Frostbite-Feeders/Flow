@@ -37,6 +37,13 @@ const WORK_QUEUES = {
   alerts: { label: 'Needs Check' },
   tasks: { label: 'Due Soon' },
 };
+const MAP_MODES = {
+  rack: 'Rack Map',
+  wall: 'Wall Flow',
+};
+const WALL_LEVELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+const WALL_COLUMNS = 12;
+const WALL_CAPACITY = WALL_LEVELS.length * WALL_COLUMNS;
 
 const STATUS_COPY = {
   breeding: 'Breeding',
@@ -216,6 +223,63 @@ function uniqueValues(rows, field) {
   return [...new Set(rows.map((row) => row[field]).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, undefined, { numeric: true }),
   );
+}
+
+function sortPhysicalRows(rows) {
+  return [...rows].sort((a, b) =>
+    a.room.localeCompare(b.room, undefined, { numeric: true }) ||
+    a.rack.localeCompare(b.rack, undefined, { numeric: true }) ||
+    a.bin.localeCompare(b.bin, undefined, { numeric: true }),
+  );
+}
+
+function buildWallSections(rows) {
+  const orderedRows = sortPhysicalRows(rows);
+  const sectionCount = Math.max(1, Math.ceil(orderedRows.length / WALL_CAPACITY));
+
+  return Array.from({ length: sectionCount }, (_, wallIndex) => {
+    const start = wallIndex * WALL_CAPACITY;
+    const wallRows = orderedRows.slice(start, start + WALL_CAPACITY);
+    const cells = Array.from({ length: WALL_CAPACITY }, (_, pathIndex) => {
+      const levelIndex = Math.floor(pathIndex / WALL_COLUMNS);
+      const stepIndex = pathIndex % WALL_COLUMNS;
+      const column = levelIndex % 2 === 0 ? stepIndex + 1 : WALL_COLUMNS - stepIndex;
+      return {
+        id: `${wallIndex}-${pathIndex}`,
+        row: wallRows[pathIndex] || null,
+        pathIndex: start + pathIndex + 1,
+        level: WALL_LEVELS[levelIndex],
+        column,
+      };
+    });
+
+    return {
+      id: `wall-${wallIndex + 1}`,
+      label: `Wall ${wallIndex + 1}`,
+      start,
+      rows: wallRows,
+      cells,
+    };
+  });
+}
+
+function buildWallAssignments(rows) {
+  const assignments = new Map();
+  buildWallSections(rows).forEach((section) => {
+    section.cells.forEach((cell) => {
+      if (!cell.row) return;
+      const wallSlot = `${cell.level}${String(cell.column).padStart(2, '0')}`;
+      assignments.set(cell.row.bin, {
+        wall_id: section.id,
+        wall_label: section.label,
+        wall_level: cell.level,
+        wall_position: cell.column,
+        wall_slot: wallSlot,
+        wall_walk_index: cell.pathIndex,
+      });
+    });
+  });
+  return assignments;
 }
 
 function daysUntil(date) {
@@ -552,6 +616,7 @@ function App() {
   const [activeRack, setActiveRack] = useState('all');
   const [activeStatus, setActiveStatus] = useState('all');
   const [activeWorkQueue, setActiveWorkQueue] = useState('all');
+  const [mapMode, setMapMode] = useState('rack');
   const [query, setQuery] = useState(() => decodeURIComponent(window.location.hash.replace(/^#/, '')));
   const [selectedBin, setSelectedBin] = useState(() => query || '10-1-01');
   const [draft, setDraft] = useState(null);
@@ -733,6 +798,9 @@ function App() {
     }, {});
   }, [mapRows]);
 
+  const wallSections = useMemo(() => buildWallSections(mapRows), [mapRows]);
+  const wallAssignments = useMemo(() => buildWallAssignments(rows), [rows]);
+
   const operatorActions = useMemo(() => {
     const overdue = [...summaries.overdue].sort((a, b) => (daysUntil(a.dueDate) ?? 0) - (daysUntil(b.dueDate) ?? 0));
     const nextDue = [...summaries.dueSoon].sort((a, b) => (daysUntil(a.dueDate) ?? 999) - (daysUntil(b.dueDate) ?? 999));
@@ -862,6 +930,11 @@ function App() {
       '## Operator Actions',
       ...operatorActions.map((action) => `- ${action.title}: ${action.detail}`),
       '',
+      '## Wall Flow',
+      `- Wall sections use ${WALL_LEVELS.join('-')} levels and ${WALL_COLUMNS} positions across.`,
+      '- Walk order is serpentine: A01-A12, then B12-B01, then repeat downward.',
+      `- Visible wall sections right now: ${wallSections.length}.`,
+      '',
       '## Changed Today',
       ...(changedTodayRows.length
         ? changedTodayRows.slice(0, 50).map((row) => `- ${row.bin} (${row.room}/${row.rack}): ${row.lastEvent || 'Flow update'}`)
@@ -905,6 +978,7 @@ function App() {
       freezer_on_hand: sku.freezerOnHand,
     }));
     const binNodes = rows.map((row) => ({
+      ...(wallAssignments.get(row.bin) || {}),
       id: `bin:${row.bin}`,
       type: 'bin',
       label: row.bin,
@@ -958,6 +1032,7 @@ function App() {
         edges: graphEdges,
       },
       per_bin_inventory: rows.map((row) => ({
+        ...(wallAssignments.get(row.bin) || {}),
         bin: row.bin,
         room: row.room,
         rack: row.rack,
@@ -1293,12 +1368,25 @@ function App() {
           <section className="bin-map" data-testid="bin-map">
             <div className="panel-head">
               <div>
-                <h2>Bin Map</h2>
+                <h2>{MAP_MODES[mapMode]}</h2>
                 <p>{mapRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
                 {activeWorkQueue !== 'all' && <p>{WORK_QUEUES[activeWorkQueue].label}</p>}
+                {mapMode === 'wall' && <p>A-J levels, 12 across, serpentine walk order</p>}
               </div>
             </div>
             <div className="filter-row">
+              <div className="control-group" aria-label="Map mode">
+                {Object.entries(MAP_MODES).map(([mode, label]) => (
+                  <button
+                    className={classNames(mapMode === mode && 'selected')}
+                    key={mode}
+                    type="button"
+                    onClick={() => setMapMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="control-group" aria-label="Room filter">
                 {ROOMS.map((room) => (
                   <button
@@ -1324,20 +1412,30 @@ function App() {
                 ))}
               </div>
             </div>
-            <div className="rack-scroll">
-              {visibleRacks.map(([rack, rackRows]) => (
-                <RackColumn
-                  key={rack}
-                  rack={rack}
-                  rows={rackRows}
-                  selectedBin={selected.bin}
-                  searchMatchBins={searchMatchBins}
-                  hasSearch={Boolean(query.trim())}
-                  onSelect={selectBin}
-                />
-              ))}
-              {!visibleRacks.length && <div className="empty-state">No bins match this filter.</div>}
-            </div>
+            {mapMode === 'rack' ? (
+              <div className="rack-scroll">
+                {visibleRacks.map(([rack, rackRows]) => (
+                  <RackColumn
+                    key={rack}
+                    rack={rack}
+                    rows={rackRows}
+                    selectedBin={selected.bin}
+                    searchMatchBins={searchMatchBins}
+                    hasSearch={Boolean(query.trim())}
+                    onSelect={selectBin}
+                  />
+                ))}
+                {!visibleRacks.length && <div className="empty-state">No bins match this filter.</div>}
+              </div>
+            ) : (
+              <WallFlow
+                sections={wallSections}
+                selectedBin={selected.bin}
+                searchMatchBins={searchMatchBins}
+                hasSearch={Boolean(query.trim())}
+                onSelect={selectBin}
+              />
+            )}
             <div className="legend">
               <span><i className="dot needs-action" />Action needed</span>
               <span><i className="dot due-soon" />Due soon</span>
@@ -1465,6 +1563,73 @@ function RackColumn({ rack, rows, selectedBin, searchMatchBins, hasSearch, onSel
         })}
       </div>
     </section>
+  );
+}
+
+function WallFlow({ sections, selectedBin, searchMatchBins, hasSearch, onSelect }) {
+  return (
+    <div className="wall-flow" data-testid="wall-flow">
+      <div className="wall-note">
+        <strong>Wall walk order</strong>
+        <span>Two physical racks can be worked as one wall: A-J down, 12 positions across, then weave back on the next level.</span>
+      </div>
+      {sections.map((section) => (
+        <section className="wall-section" key={section.id}>
+          <header>
+            <div>
+              <h3>{section.label}</h3>
+              <span>{section.rows.length} bins in this 120-slot wall section</span>
+            </div>
+            <strong>{WALL_CAPACITY - section.rows.length} empty slots</strong>
+          </header>
+          <div className="wall-grid" aria-label={`${section.label} serpentine walk grid`}>
+            {section.cells.map((cell) => {
+              const row = cell.row;
+              const wallSlot = `${cell.level}${String(cell.column).padStart(2, '0')}`;
+              if (!row) {
+                return (
+                  <div
+                    className="wall-cell empty"
+                    data-testid="wall-walk-cell"
+                    data-wall-slot={wallSlot}
+                    data-bin-code=""
+                    key={cell.id}
+                  >
+                    <strong>{wallSlot}</strong>
+                    <span>empty</span>
+                  </div>
+                );
+              }
+              const activity = getRowActivity(row);
+              const meta = getBinCardMeta(row);
+              return (
+                <button
+                  className={classNames(
+                    'wall-cell',
+                    row.status,
+                    activity.key,
+                    hasSearch && searchMatchBins.has(row.bin) && 'search-hit',
+                    selectedBin === row.bin && 'active',
+                  )}
+                  data-testid="wall-walk-cell"
+                  data-wall-slot={wallSlot}
+                  data-bin-code={row.bin}
+                  data-walk-index={cell.pathIndex}
+                  key={cell.id}
+                  type="button"
+                  onClick={() => onSelect(row)}
+                  title={`${wallSlot} - ${row.bin} - ${activity.label}`}
+                >
+                  <strong>{wallSlot}</strong>
+                  <span>{row.bin}</span>
+                  <small>{meta.primary}</small>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 
