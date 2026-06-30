@@ -226,7 +226,8 @@ async function main() {
     (await page.locator('[data-testid="scan-tray"]').count()) +
     (await page.locator('.change-preview').count()) +
     (await page.locator('.write-confirm').count()) +
-    (await page.locator('.qr-card').count());
+    (await page.locator('.qr-card').count()) +
+    (await page.locator('.detail-list').count());
   const visibleShopifyUi =
     (await page.locator('text=Shopify View').count()) +
     (await page.locator('text=Shopify Mapping').count());

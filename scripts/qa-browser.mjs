@@ -217,7 +217,8 @@ async function main() {
     (await desktop.locator('[data-testid="scan-bin-action"]').count()) +
     (await desktop.locator('.change-preview').count()) +
     (await desktop.locator('.write-confirm').count()) +
-    (await desktop.locator('.qr-card').count());
+    (await desktop.locator('.qr-card').count()) +
+    (await desktop.locator('.detail-list').count());
   const desktopScreenshot = path.join(outDir, 'flow-desktop.png');
   await desktop.screenshot({ path: desktopScreenshot, fullPage: true });
 

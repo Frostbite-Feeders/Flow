@@ -1215,7 +1215,6 @@ function App() {
   const visibleRacks = Object.entries(rackGroups).sort(([a], [b]) =>
     a.localeCompare(b, undefined, { numeric: true }),
   );
-  const sidebarRackRows = uniqueValues(activeRoom === 'all' ? rows : rows.filter((row) => row.room === activeRoom), 'rack');
   const displayedRacks = activeRack === 'all' ? visibleRacks.slice(0, 1) : visibleRacks;
 
   return (
@@ -1236,31 +1235,34 @@ function App() {
           <div className="sidebar-section-title">Rooms & Racks</div>
           <RoomButton label="All rooms" count={rows.length} selected={activeRoom === 'all'} onClick={() => selectRoom('all')} />
           {ROOMS.filter((room) => room !== 'all').map((room) => (
-            <RoomButton
-              key={room}
-              label={room}
-              count={summaries.roomCounts[room] || 0}
-              selected={activeRoom === room}
-              onClick={() => selectRoom(room)}
-            />
+            <div className="sidebar-room-group" key={room}>
+              <RoomButton
+                label={room}
+                count={summaries.roomCounts[room] || 0}
+                selected={activeRoom === room}
+                onClick={() => selectRoom(room)}
+              />
+              {activeRoom === room && (
+                <div className="sidebar-racks">
+                  {uniqueValues(rows.filter((row) => row.room === room), 'rack').slice(0, 18).map((rack) => (
+                    <button
+                      className={classNames('rack-row', activeRack === rack && 'selected')}
+                      key={rack}
+                      type="button"
+                      onClick={() => {
+                        setActiveRack(rack);
+                        const first = rows.find((row) => row.rack === rack);
+                        if (first) selectBin(first);
+                      }}
+                    >
+                      {rack}
+                      <span>{rows.filter((row) => row.rack === rack).length}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
-          <div className="sidebar-racks">
-            {sidebarRackRows.slice(0, 18).map((rack) => (
-              <button
-                className={classNames('rack-row', activeRack === rack && 'selected')}
-                key={rack}
-                type="button"
-                onClick={() => {
-                  setActiveRack(rack);
-                  const first = rows.find((row) => row.rack === rack);
-                  if (first) selectBin(first);
-                }}
-              >
-                {rack}
-                <span>{rows.filter((row) => row.rack === rack).length}</span>
-              </button>
-            ))}
-          </div>
         </section>
 
         <div className="nav-actions">
@@ -1602,8 +1604,6 @@ function BinDetail({
   saving,
   canWriteShared,
 }) {
-  const due = daysUntil(selected.dueDate);
-  const dueTone = due === null ? 'muted' : due < 0 ? 'danger' : due <= 7 ? 'warn' : 'ok';
   const displayStatus = draft?.status || selected.status;
   const displayRow = {
     ...selected,
@@ -1766,13 +1766,6 @@ function BinDetail({
           {saving ? 'Saving...' : canWriteShared ? 'Save shared state' : 'Shared state offline'}
         </button>
       </form>
-
-      <dl className="detail-list">
-        <div><dt>Actual</dt><dd>{selected.actualCount || 0}</dd></div>
-        <div><dt>Due</dt><dd className={dueTone}>{formatDate(selected.dueDate)}</dd></div>
-        <div><dt>Updated</dt><dd>{selected.updatedAt ? new Date(selected.updatedAt).toLocaleString() : 'Not set'}</dd></div>
-        <div><dt>Status</dt><dd>{STATUS_COPY[selected.status] || selected.status}</dd></div>
-      </dl>
 
     </aside>
   );

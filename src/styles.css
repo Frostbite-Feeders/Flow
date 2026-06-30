@@ -364,6 +364,11 @@ kbd {
   min-height: 0;
 }
 
+.sidebar-room-group {
+  display: grid;
+  gap: 4px;
+}
+
 .sidebar-section-title {
   color: #7fb0d1;
   font-size: 11px;
@@ -1034,33 +1039,6 @@ kbd {
   color: #61778d;
   opacity: 1;
   cursor: not-allowed;
-}
-
-.detail-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0;
-}
-
-.detail-list div {
-  border: 1px solid #d9e5ed;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 11px;
-}
-
-.detail-list dt {
-  color: #61778d;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.detail-list dd {
-  margin: 4px 0 0;
-  font-size: 12px;
-  font-weight: 850;
 }
 
 .danger { color: #cf222e; }
