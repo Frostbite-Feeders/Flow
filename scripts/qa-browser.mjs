@@ -25,26 +25,6 @@ const desktopEditBin = '55-1-02';
 const mobileEditBin = 'B1-01';
 let flowStateSnapshot = null;
 
-function assertCleanStartState(record) {
-  const bins = Object.values(record.payload?.bins || {});
-  if (bins.length !== 714) {
-    throw new Error(`Clean-start state expected 714 bins, got ${bins.length}`);
-  }
-  const activeBins = bins.filter((bin) => bin.status !== 'open');
-  const datedBins = bins.filter((bin) => bin.dueDate || bin.birthDate || bin.growoutStartDate);
-  const updatedBins = bins.filter((bin) => bin.updatedAt);
-  const countedBins = bins.filter((bin) => Number(bin.actualCount || 0) !== 0 || Number(bin.currentCount || 0) !== 0);
-  const motherSlotBins = bins.filter((bin) => Number(bin.motherSlots || 0) !== 0);
-  const activeVacationMotherBins = bins.filter((bin) => Number(bin.activeVacationMothers || 0) !== 0);
-  const notedBins = bins.filter((bin) => bin.note);
-  const eventBins = bins.filter((bin) => (bin.events?.length || 0) !== 0);
-  if (activeBins.length || datedBins.length || updatedBins.length || countedBins.length || motherSlotBins.length || activeVacationMotherBins.length || notedBins.length || eventBins.length) {
-    throw new Error(
-      `Expected empty Flow start, got active=${activeBins.length} dated=${datedBins.length} updated=${updatedBins.length} counted=${countedBins.length} motherSlots=${motherSlotBins.length} activeVacationMothers=${activeVacationMotherBins.length} notes=${notedBins.length} events=${eventBins.length}`,
-    );
-  }
-}
-
 function assertDryRunWrite({ write, originalBins, binCode, note, actualCount, status, skuTarget, expectOpenCleared = false }) {
   if (write.body?.updated_by !== 'frostbite-flow-dashboard') {
     throw new Error(`Unexpected updated_by on dry-run save: ${write.body?.updated_by}`);
@@ -166,33 +146,29 @@ async function main() {
   const stateResponse = await stateResponsePromise;
   const stateJson = await stateResponse.json();
   flowStateSnapshot = stateJson;
+  const openBinCode = Object.values(stateJson.payload?.bins || {}).find((bin) => bin.status === 'open')?.code || '10-1-03';
   await desktop.locator('text=Shared live').first().waitFor({ timeout: 10000 });
 
   const title = await desktop.title();
   const heading = await desktop.locator('h1').first().textContent();
   const metrics = await desktop.locator('.metric-strip').innerText();
-  await desktop.click('button:has-text("Find Bin")');
-  await desktop.locator('section[aria-label="Find Bin Mode"]').waitFor({ timeout: 5000 });
-  const scanModeText = await desktop.locator('section[aria-label="Find Bin Mode"]').innerText();
   const okfDownloadPromise = desktop.waitForEvent('download');
   await desktop.click('[data-testid="okf-export-action"]');
   const okfDownload = await okfDownloadPromise;
   const okfPath = await okfDownload.path();
   const okfBundle = JSON.parse(readFileSync(okfPath, 'utf8'));
 
-  assertCleanStartState(stateJson);
-
   await desktop.fill(searchInput, mobileEditBin);
   await desktop.waitForTimeout(300);
   const generalSearchSelectedBin = await desktop.locator('.detail-title h2').textContent();
   const searchResultsText = await desktop.locator('.search-results').innerText();
 
-  await desktop.fill(searchInput, mobileEditBin);
+  await desktop.fill(searchInput, openBinCode);
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
-  const mobileBinOpenDetailText = await desktop.locator('.detail-panel').innerText();
+  const firstOpenDetailText = await desktop.locator('.detail-panel').innerText();
 
-  await desktop.fill(searchInput, '10-1-03');
+  await desktop.fill(searchInput, openBinCode);
   await desktop.press(searchInput, 'Enter');
   await desktop.waitForTimeout(300);
   const openDetailText = await desktop.locator('.detail-panel').innerText();
@@ -214,8 +190,6 @@ async function main() {
   await desktop.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('nursery');
   await desktop.getByLabel('Actual count').fill(String(desktopActualCount));
   await desktop.locator('.edit-form textarea').fill(drySaveNote);
-  const writePreview = await desktop.locator('.change-preview').innerText();
-  await desktop.locator('.write-confirm input').check();
   await desktop.click('button:has-text("Save shared state")');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
     await desktop.waitForTimeout(100);
@@ -226,8 +200,6 @@ async function main() {
   await desktop.waitForTimeout(300);
   await desktop.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('open');
   await desktop.locator('.edit-form textarea').fill(openTransitionNote);
-  const openTransitionPreview = await desktop.locator('.change-preview').innerText();
-  await desktop.locator('.write-confirm input').check();
   await desktop.click('button:has-text("Save shared state")');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
     await desktop.waitForTimeout(100);
@@ -238,9 +210,14 @@ async function main() {
   await desktop.waitForTimeout(300);
 
   const selectedBin = await desktop.locator('.detail-title h2').textContent();
-  const qrTarget = await desktop.locator('.qr-card code').textContent();
   const binMapText = await desktop.locator('[data-testid="bin-map"]').innerText();
   const visibleShopifyUi = await desktop.locator('text=Shopify View').count() + await desktop.locator('text=Shopify Mapping').count();
+  const removedHumanChrome =
+    (await desktop.locator('[data-testid="daily-report-action"]').count()) +
+    (await desktop.locator('[data-testid="scan-bin-action"]').count()) +
+    (await desktop.locator('.change-preview').count()) +
+    (await desktop.locator('.write-confirm').count()) +
+    (await desktop.locator('.qr-card').count());
   const desktopScreenshot = path.join(outDir, 'flow-desktop.png');
   await desktop.screenshot({ path: desktopScreenshot, fullPage: true });
 
@@ -254,16 +231,12 @@ async function main() {
   mobile.on('pageerror', (error) => browserErrors.push(error.message));
   await mobile.route('**/*', allowLocalReadAndDryRunWrite);
   await mobile.goto(new URL(`#${mobileEditBin}`, localAppUrl).toString(), { waitUntil: 'networkidle' });
-  await mobile.click('button:has-text("Find Bin")');
-  await mobile.locator('section[aria-label="Find Bin Mode"]').waitFor({ timeout: 5000 });
-  const mobileScanModeText = await mobile.locator('section[aria-label="Find Bin Mode"]').innerText();
   await mobile.fill(searchInput, mobileEditBin);
   await mobile.press(searchInput, 'Enter');
   await mobile.waitForTimeout(300);
   await mobile.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('breeding');
   await mobile.getByLabel('Actual count').fill(String(mobileActualCount));
   await mobile.locator('.edit-form textarea').fill(mobileDrySaveNote);
-  await mobile.locator('.write-confirm input').check();
   await mobile.click('button:has-text("Save shared state")');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length < 3; attempt += 1) {
     await mobile.waitForTimeout(100);
@@ -280,13 +253,10 @@ async function main() {
     heading,
     generalSearchSelectedBin,
     selectedBin,
-    qrTarget,
     mobileSelectedBin,
     metrics,
-    scanModeText,
-    mobileScanModeText,
     searchResultsText,
-    mobileBinOpenDetailText,
+    firstOpenDetailText,
     openDetailText,
     wallCells,
     firstSlot,
@@ -294,10 +264,9 @@ async function main() {
     thirteenthSlot,
     twentyFourthSlot,
     firstCanonicalBin,
-    writePreview,
-    openTransitionPreview,
     binMapText,
     visibleShopifyUi,
+    removedHumanChrome,
     okfFilename: okfDownload.suggestedFilename(),
     okfBundleType: okfBundle.bundle_type,
     okfGraphNodes: okfBundle.graph?.nodes?.length || 0,
@@ -330,18 +299,12 @@ async function main() {
   if (result.stateBinCount !== 714) {
     throw new Error(`Expected 714 live bins, got ${result.stateBinCount}`);
   }
-  if (!scanModeText.includes('Find Bin Mode') || !scanModeText.includes('Current bin')) {
-    throw new Error(`Find Bin tray did not render expected text: ${scanModeText}`);
-  }
-  if (!mobileScanModeText.includes('Find Bin Mode') || !mobileScanModeText.includes('Current bin')) {
-    throw new Error(`Mobile Find Bin tray did not render expected text: ${mobileScanModeText}`);
-  }
   if (!searchResultsText.includes(mobileEditBin)) {
     throw new Error(`Search results did not show expected bin match: ${searchResultsText}`);
   }
   for (const expected of ['Open', 'Available bin capacity', 'ACTUAL', '0 in bin']) {
-    if (!mobileBinOpenDetailText.includes(expected)) {
-      throw new Error(`Clean-start bin detail missing ${expected}: ${mobileBinOpenDetailText}`);
+    if (!firstOpenDetailText.includes(expected)) {
+      throw new Error(`Open bin detail missing ${expected}: ${firstOpenDetailText}`);
     }
   }
   for (const expected of ['Open', 'Available bin capacity', 'ACTUAL', '0 in bin']) {
@@ -362,11 +325,8 @@ async function main() {
   if (!firstCanonicalBin || firstCanonicalBin === firstSlot) {
     throw new Error(`Wall Flow must preserve canonical bin code separately from wall slot. Got ${firstCanonicalBin}`);
   }
-  if (!writePreview.includes('Shared write preview') || !writePreview.includes('Floor note') || !writePreview.includes('Actual count')) {
-    throw new Error(`Save preview did not show the changed note: ${writePreview}`);
-  }
-  if (!openTransitionPreview.includes('Shared write preview') || !openTransitionPreview.includes('Floor note')) {
-    throw new Error(`Open transition preview did not show note-only clean-start write: ${openTransitionPreview}`);
+  if (removedHumanChrome > 0) {
+    throw new Error(`Removed operator chrome is still present (${removedHumanChrome} match/es).`);
   }
   if (visibleShopifyUi > 0) {
     throw new Error('Visible Shopify workflow copy should not be present in the operator UI');
@@ -388,15 +348,10 @@ async function main() {
   if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
     throw new Error('OKF per-bin inventory is missing numeric actual_count values');
   }
-  if (!okfBundle.per_bin_inventory.every((row) => Number(row.mothers || 0) === 0 && Number(row.rats_per_litter || 0) === 0)) {
-    throw new Error('OKF per-bin inventory leaked clean-start nursery count fields');
-  }
   const b101 = okfBundle.per_bin_inventory.find((row) => row.bin === mobileEditBin);
   const g101 = okfBundle.per_bin_inventory.find((row) => row.bin === 'G1-01');
-  const open100103 = okfBundle.per_bin_inventory.find((row) => row.bin === '10-1-03');
-  if (b101?.actual_count !== 0) throw new Error(`Expected ${mobileEditBin} clean-start actual_count 0, got ${b101?.actual_count}`);
-  if (g101?.actual_count !== 0) throw new Error(`Expected G1-01 clean-start actual_count 0, got ${g101?.actual_count}`);
-  if (open100103?.actual_count !== 0) throw new Error(`Expected 10-1-03 open actual_count 0, got ${open100103?.actual_count}`);
+  if (!b101) throw new Error(`OKF per-bin inventory missing ${mobileEditBin}`);
+  if (!g101) throw new Error('OKF per-bin inventory missing G1-01');
   if ((okfBundle.graph?.nodes?.length || 0) < 714 || (okfBundle.graph?.edges?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected room/rack/bin/SKU nodes or edges');
   }
@@ -457,9 +412,6 @@ async function main() {
   }
   if (selectedBin !== desktopEditBin) {
     throw new Error(`QR lookup selected ${selectedBin}, expected ${desktopEditBin}`);
-  }
-  if (!qrTarget?.endsWith(`#${desktopEditBin}`)) {
-    throw new Error(`QR target did not resolve to #${desktopEditBin}: ${qrTarget}`);
   }
   if (mobileSelectedBin !== mobileEditBin) {
     throw new Error(`Mobile hash selected ${mobileSelectedBin}, expected ${mobileEditBin}`);

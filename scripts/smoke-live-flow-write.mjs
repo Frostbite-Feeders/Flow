@@ -71,7 +71,6 @@ async function main() {
   const selectedBin = await page.locator('.detail-title h2').textContent();
   if (selectedBin !== binCode) throw new Error(`Expected ${binCode}, selected ${selectedBin}`);
   await page.locator('.edit-form textarea').fill(smokeNote);
-  await page.locator('.write-confirm input').check();
   await page.click('button:has-text("Save shared state")');
   await page.locator(`text=Saved ${binCode} to shared Flow`).waitFor({ timeout: 15000 });
   await browser.close();

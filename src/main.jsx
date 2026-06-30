@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertTriangle,
   Bell,
   Check,
   ClipboardList,
@@ -9,7 +8,6 @@ import {
   FileText,
   Loader2,
   MapPinned,
-  ScanLine,
   Search,
   Snowflake,
   Sparkles,
@@ -621,7 +619,7 @@ function App() {
     detail: 'Loading Supabase-backed state through /api/flow...',
   });
   const [activeRoom, setActiveRoom] = useState('all');
-  const [activeRack, setActiveRack] = useState('all');
+  const [activeRack, setActiveRack] = useState(() => baselineRows[0]?.rack || 'all');
   const [activeStatus, setActiveStatus] = useState('all');
   const [activeWorkQueue, setActiveWorkQueue] = useState('all');
   const [mapMode, setMapMode] = useState('rack');
@@ -629,8 +627,6 @@ function App() {
   const [selectedBin, setSelectedBin] = useState(() => query || '10-1-01');
   const [draft, setDraft] = useState(null);
   const [draftDirty, setDraftDirty] = useState(false);
-  const [writeConfirmed, setWriteConfirmed] = useState(false);
-  const [scanMode, setScanMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const draftSourceRef = useRef({ bin: null, updatedAt: null });
@@ -771,7 +767,6 @@ function App() {
     if (!draftDirty || draftSourceRef.current.bin !== selected.bin) {
       setDraft(draftFromRow(selected));
       setDraftDirty(false);
-      setWriteConfirmed(false);
       draftSourceRef.current = {
         bin: selected.bin,
         updatedAt: selected.updatedAt || '',
@@ -859,10 +854,12 @@ function App() {
 
   function selectRoom(room) {
     setActiveRoom(room);
-    setActiveRack('all');
     setActiveWorkQueue('all');
     const first = rows.find((row) => room === 'all' || row.room === room);
-    if (first) selectBin(first);
+    if (first) {
+      setActiveRack(first.rack);
+      selectBin(first);
+    }
   }
 
   function selectBin(row) {
@@ -890,26 +887,22 @@ function App() {
 
   function resetFlow() {
     setActiveRoom('all');
-    setActiveRack('all');
+    setActiveRack(rows[0]?.rack || 'all');
     setActiveStatus('all');
     setActiveWorkQueue('all');
     setQuery('');
   }
 
-  function beginQuickScan() {
-    setScanMode(true);
-    setQuery('');
-    setTimeout(() => searchRef.current?.focus(), 0);
-  }
-
   function selectWorkQueue(queue) {
     setActiveWorkQueue(queue);
     setActiveRoom('all');
-    setActiveRack('all');
     setActiveStatus('all');
     if (queue === 'all') return;
     const first = rows.find((row) => matchesWorkQueue(row, queue));
-    if (first) selectBin(first);
+    if (first) {
+      setActiveRack(first.rack);
+      selectBin(first);
+    }
   }
 
   function downloadVisibleRows() {
@@ -1127,10 +1120,6 @@ function App() {
       showToast('No bin changes to save');
       return;
     }
-    if (!writeConfirmed) {
-      showToast('Confirm the Flow write before saving');
-      return;
-    }
     const now = new Date().toISOString();
     const loadedAt = draftSourceRef.current.bin === selected.bin
       ? draftSourceRef.current.updatedAt || ''
@@ -1204,7 +1193,6 @@ function App() {
       setRemoteRecord({ ...(latestRecord || {}), payload, updated_at: result?.updated_at || now });
       setRows(mergeSharedState(baselineRows, payload));
       setDraftDirty(false);
-      setWriteConfirmed(false);
       draftSourceRef.current = { bin: selected.bin, updatedAt: now };
       setSyncState({
         status: 'live',
@@ -1227,6 +1215,8 @@ function App() {
   const visibleRacks = Object.entries(rackGroups).sort(([a], [b]) =>
     a.localeCompare(b, undefined, { numeric: true }),
   );
+  const sidebarRackRows = uniqueValues(activeRoom === 'all' ? rows : rows.filter((row) => row.room === activeRoom), 'rack');
+  const displayedRacks = activeRack === 'all' ? visibleRacks.slice(0, 1) : visibleRacks;
 
   return (
     <main className="app-shell" data-testid="frostbite-flow-app">
@@ -1240,8 +1230,43 @@ function App() {
 
         <nav className="nav">
           <div className="nav-label"><MapPinned size={20} /> Floor Board</div>
-          <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
         </nav>
+
+        <section className="sidebar-rooms">
+          <div className="sidebar-section-title">Rooms & Racks</div>
+          <RoomButton label="All rooms" count={rows.length} selected={activeRoom === 'all'} onClick={() => selectRoom('all')} />
+          {ROOMS.filter((room) => room !== 'all').map((room) => (
+            <RoomButton
+              key={room}
+              label={room}
+              count={summaries.roomCounts[room] || 0}
+              selected={activeRoom === room}
+              onClick={() => selectRoom(room)}
+            />
+          ))}
+          <div className="sidebar-racks">
+            {sidebarRackRows.slice(0, 18).map((rack) => (
+              <button
+                className={classNames('rack-row', activeRack === rack && 'selected')}
+                key={rack}
+                type="button"
+                onClick={() => {
+                  setActiveRack(rack);
+                  const first = rows.find((row) => row.rack === rack);
+                  if (first) selectBin(first);
+                }}
+              >
+                {rack}
+                <span>{rows.filter((row) => row.rack === rack).length}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="nav-actions">
+          <button type="button" onClick={downloadVisibleRows}><Download size={20} /> Exports</button>
+          <button type="button" data-testid="okf-export-action" onClick={downloadOkfBundle}><FileText size={20} /> OKF Bundle</button>
+        </div>
 
         <div className="nav-lower" aria-label="Current work queues">
           <button
@@ -1313,28 +1338,6 @@ function App() {
           </section>
         )}
 
-        <section className="actions-row">
-          <button type="button" data-testid="daily-report-action" onClick={downloadDailyReport}><ClipboardList size={17} /> Daily Report</button>
-          <button type="button" data-testid="okf-export-action" onClick={downloadOkfBundle}><FileText size={17} /> OKF Bundle</button>
-          <button type="button" data-testid="scan-bin-action" onClick={beginQuickScan}><ScanLine size={17} /> Find Bin</button>
-        </section>
-
-        {scanMode && (
-          <section className="scan-tray" aria-label="Find Bin Mode" data-testid="scan-tray">
-            <div>
-              <strong>Find Bin Mode</strong>
-              <span>Ready for bin code. Current bin: {selected.bin}</span>
-            </div>
-            <button type="button" onClick={beginQuickScan}><ScanLine size={16} /> Focus scanner</button>
-            {operatorActions[1]?.rows?.[0] && (
-              <button type="button" onClick={() => selectBin(operatorActions[1].rows[0])}>
-                <AlertTriangle size={16} /> Next due
-              </button>
-            )}
-            <button type="button" onClick={() => setScanMode(false)}>Done</button>
-          </section>
-        )}
-
         <section className="metric-strip">
           <Metric label="Total Bins" value={rows.length} detail="100%" />
           <Metric label="Active" value={summaries.activeRows.length} detail={`${Math.round((summaries.activeRows.length / rows.length) * 100)}%`} tone="green" />
@@ -1345,39 +1348,11 @@ function App() {
         </section>
 
         <section className="dashboard-grid">
-          <aside className="room-list">
-            <div className="panel-head">
-              <h2>Rooms & Racks</h2>
-            </div>
-            <RoomButton label="All rooms" count={rows.length} selected={activeRoom === 'all'} onClick={() => selectRoom('all')} />
-            {ROOMS.filter((room) => room !== 'all').map((room) => (
-              <div key={room}>
-                <RoomButton
-                  label={room}
-                  count={summaries.roomCounts[room] || 0}
-                  selected={activeRoom === room}
-                  onClick={() => selectRoom(room)}
-                />
-                {activeRoom === room && uniqueValues(rows.filter((row) => row.room === room), 'rack').slice(0, 12).map((rack) => (
-                  <button
-                    className={classNames('rack-row', activeRack === rack && 'selected')}
-                    key={rack}
-                    type="button"
-                    onClick={() => setActiveRack(rack)}
-                  >
-                    {rack}
-                    <span>{rows.filter((row) => row.rack === rack).length}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </aside>
-
           <section className="bin-map" data-testid="bin-map">
             <div className="panel-head">
               <div>
                 <h2>{MAP_MODES[mapMode]}</h2>
-                <p>{mapRows.length} visible - {activeRoom === 'all' ? 'all rooms' : activeRoom}</p>
+                <p>{mapRows.length} visible - {activeRack === 'all' ? activeRoom : activeRack}</p>
                 {activeWorkQueue !== 'all' && <p>{WORK_QUEUES[activeWorkQueue].label}</p>}
                 {mapMode === 'wall' && <p>A-J levels, 12 across, serpentine walk order</p>}
               </div>
@@ -1392,18 +1367,6 @@ function App() {
                     onClick={() => setMapMode(mode)}
                   >
                     {label}
-                  </button>
-                ))}
-              </div>
-              <div className="control-group" aria-label="Room filter">
-                {ROOMS.map((room) => (
-                  <button
-                    className={classNames(activeRoom === room && 'selected')}
-                    key={room}
-                    type="button"
-                    onClick={() => selectRoom(room)}
-                  >
-                    {room === 'all' ? 'All' : room}
                   </button>
                 ))}
               </div>
@@ -1422,7 +1385,7 @@ function App() {
             </div>
             {mapMode === 'rack' ? (
               <div className="rack-scroll">
-                {visibleRacks.map(([rack, rackRows]) => (
+                {displayedRacks.map(([rack, rackRows]) => (
                   <RackColumn
                     key={rack}
                     rack={rack}
@@ -1433,7 +1396,7 @@ function App() {
                     onSelect={selectBin}
                   />
                 ))}
-                {!visibleRacks.length && <div className="empty-state">No bins match this filter.</div>}
+                {!displayedRacks.length && <div className="empty-state">No bins match this filter.</div>}
               </div>
             ) : (
               <WallFlow
@@ -1481,15 +1444,6 @@ function App() {
           </aside>
         </section>
 
-        <section className="alert-strip">
-          {[...summaries.overdue, ...summaries.dueSoon].slice(0, 4).map((row) => (
-            <button type="button" key={row.bin} onClick={() => selectBin(row)}>
-              <AlertTriangle size={18} />
-              <strong>{row.bin} {daysUntil(row.dueDate) < 0 ? 'Overdue' : 'Due Soon'}</strong>
-              <span>{row.sku} - {formatDate(row.dueDate)}</span>
-            </button>
-          ))}
-        </section>
       </section>
 
       <BinDetail
@@ -1498,11 +1452,8 @@ function App() {
         setDraft={setDraft}
         onDraftDirty={() => {
           setDraftDirty(true);
-          setWriteConfirmed(false);
         }}
         draftChanges={getDraftChanges(selected, draft)}
-        writeConfirmed={writeConfirmed}
-        setWriteConfirmed={setWriteConfirmed}
         onSave={saveSelectedBin}
         saving={saving}
         canWriteShared={syncState.status === 'live' && Boolean(remoteRecord?.payload?.bins)}
@@ -1647,8 +1598,6 @@ function BinDetail({
   setDraft,
   onDraftDirty,
   draftChanges,
-  writeConfirmed,
-  setWriteConfirmed,
   onSave,
   saving,
   canWriteShared,
@@ -1812,35 +1761,7 @@ function BinDetail({
           Floor note
           <textarea rows="3" value={draft?.note || ''} onChange={(event) => updateDraft('note', event.target.value)} />
         </label>
-        <section className="change-preview wide">
-          <div>
-            <strong>Shared write preview</strong>
-            <span>One Flow bin will be patched and one event will be appended.</span>
-          </div>
-          {draftChanges.length ? (
-            <ul>
-              {draftChanges.slice(0, 5).map((change) => (
-                <li key={change.label}>
-                  <span>{change.label}</span>
-                  <code>{change.before}</code>
-                  <strong>{change.after}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No changes yet.</p>
-          )}
-        </section>
-        <label className="write-confirm wide">
-          <input
-            type="checkbox"
-            checked={writeConfirmed}
-            disabled={!canWriteShared}
-            onChange={(event) => setWriteConfirmed(event.target.checked)}
-          />
-          <span>Confirm this updates Frostbite Flow shared state.</span>
-        </label>
-        <button className="save-button" type="submit" disabled={saving || !canWriteShared || draftChanges.length === 0 || !writeConfirmed}>
+        <button className="save-button" type="submit" disabled={saving || !canWriteShared || draftChanges.length === 0}>
           {saving ? <Loader2 className="spin" size={18} /> : <Check size={18} />}
           {saving ? 'Saving...' : canWriteShared ? 'Save shared state' : 'Shared state offline'}
         </button>
@@ -1853,13 +1774,6 @@ function BinDetail({
         <div><dt>Status</dt><dd>{STATUS_COPY[selected.status] || selected.status}</dd></div>
       </dl>
 
-      <section className="qr-card">
-        <MapPinned size={18} />
-        <div>
-          <strong>Bin link</strong>
-          <code>{selected.qrTarget}</code>
-        </div>
-      </section>
     </aside>
   );
 }

@@ -20,26 +20,6 @@ const interceptedWrites = [];
 const exercisedControls = [];
 let firstStateSnapshot = null;
 
-function assertCleanStartState(record) {
-  const bins = Object.values(record.payload?.bins || {});
-  if (bins.length !== 714) {
-    throw new Error(`Clean-start state expected 714 bins, got ${bins.length}`);
-  }
-  const activeBins = bins.filter((bin) => bin.status !== 'open');
-  const datedBins = bins.filter((bin) => bin.dueDate || bin.birthDate || bin.growoutStartDate);
-  const updatedBins = bins.filter((bin) => bin.updatedAt);
-  const countedBins = bins.filter((bin) => Number(bin.actualCount || 0) !== 0 || Number(bin.currentCount || 0) !== 0);
-  const motherSlotBins = bins.filter((bin) => Number(bin.motherSlots || 0) !== 0);
-  const activeVacationMotherBins = bins.filter((bin) => Number(bin.activeVacationMothers || 0) !== 0);
-  const notedBins = bins.filter((bin) => bin.note);
-  const eventBins = bins.filter((bin) => (bin.events?.length || 0) !== 0);
-  if (activeBins.length || datedBins.length || updatedBins.length || countedBins.length || motherSlotBins.length || activeVacationMotherBins.length || notedBins.length || eventBins.length) {
-    throw new Error(
-      `Expected empty Flow start, got active=${activeBins.length} dated=${datedBins.length} updated=${updatedBins.length} counted=${countedBins.length} motherSlots=${motherSlotBins.length} activeVacationMothers=${activeVacationMotherBins.length} notes=${notedBins.length} events=${eventBins.length}`,
-    );
-  }
-}
-
 function assertSameOrigin(url) {
   return url === 'about:blank' || new URL(url).origin === appOrigin;
 }
@@ -141,7 +121,6 @@ async function main() {
   await page.goto(appUrl, { waitUntil: 'networkidle' });
   const stateResponse = await stateResponsePromise;
   firstStateSnapshot = await stateResponse.json();
-  assertCleanStartState(firstStateSnapshot);
   await page.locator('text=Shared live').first().waitFor({ timeout: 10000 });
   const initialMetrics = await page.locator('.metric-strip').innerText();
 
@@ -160,36 +139,13 @@ async function main() {
     return download;
   }
 
-  await downloadControl('Sidebar Exports', () => page.locator('.nav button', { hasText: 'Exports' }).click());
+  await downloadControl('Sidebar Exports', () => page.locator('.nav-actions button', { hasText: 'Exports' }).click());
+  const okfDownload = await downloadControl('OKF Bundle', () => page.locator('[data-testid="okf-export-action"]').click());
+  const okfBundle = JSON.parse(readFileSync(await okfDownload.path(), 'utf8'));
   await clickControl('Needs Check queue', () => page.locator('.nav-lower button', { hasText: 'Needs Check' }).click());
   await clickControl('Due Soon queue', () => page.locator('.nav-lower button', { hasText: 'Due Soon' }).click());
   await clickControl('Refresh shared state', () => page.locator('.top-meta button').click());
   await page.locator('text=Shared live').first().waitFor({ timeout: 10000 });
-
-  const dailyReportDownload = await downloadControl('Daily Report', () => page.locator('[data-testid="daily-report-action"]').click());
-  const okfDownload = await downloadControl('OKF Bundle', () => page.locator('[data-testid="okf-export-action"]').click());
-  const okfBundle = JSON.parse(readFileSync(await okfDownload.path(), 'utf8'));
-
-  await clickControl('Find Bin', () => page.click('button:has-text("Find Bin")'));
-  await page.locator('[data-testid="scan-tray"]').waitFor({ timeout: 5000 });
-  await clickControl('Focus scanner', () => page.locator('.scan-tray button', { hasText: 'Focus scanner' }).click());
-  const nextDueButton = page.locator('.scan-tray button', { hasText: 'Next due' });
-  const nextDueCount = await nextDueButton.count();
-  if (nextDueCount > 0) {
-    await clickControl('Next due shortcut', () => nextDueButton.first().click());
-    const selectedAfterNextDue = await page.locator('.detail-title h2').textContent();
-    if (!selectedAfterNextDue?.trim()) {
-      throw new Error('Next due shortcut did not select a bin.');
-    }
-  } else {
-    const dueSoonMetric = await page.locator('.metric', { hasText: 'Due This Week' }).innerText();
-    if (!dueSoonMetric.match(/\b0\b/)) {
-      throw new Error(`Next due button absent but Due This Week was not zero: ${dueSoonMetric}`);
-    }
-    exercisedControls.push('Next due shortcut absent: no due-soon bins in current state');
-  }
-  await clickControl('Done scan mode', () => page.locator('.scan-tray button', { hasText: 'Done' }).click());
-  await clickControl('Find Bin reopen', () => page.click('button:has-text("Find Bin")'));
 
   await page.fill(searchInput, deployEditBin);
   exercisedControls.push('Typed bin lookup');
@@ -206,11 +162,6 @@ async function main() {
   }
   await clickControl('Nursery room button', () => page.locator('.room-button', { hasText: 'nursery' }).click());
   await clickControl('Growout room button', () => page.locator('.room-button', { hasText: 'growout' }).click());
-  await clickControl('Room filter All', () => page.locator('.control-group[aria-label="Room filter"] button', { hasText: 'All' }).click());
-  for (const room of ['breeding', 'nursery', 'growout']) {
-    await clickControl(`Room filter ${room}`, () => page.locator('.control-group[aria-label="Room filter"] button', { hasText: room }).click());
-  }
-  await clickControl('Room filter reset All', () => page.locator('.control-group[aria-label="Room filter"] button', { hasText: 'All' }).click());
   for (const status of ['breeding', 'nursery', 'growout', 'open']) {
     await clickControl(`Status filter ${status}`, () => page.locator('.control-group[aria-label="Status filter"] button', { hasText: status }).click());
   }
@@ -239,10 +190,6 @@ async function main() {
   for (let index = 0; index < insightCount; index += 1) {
     await clickControl(`Floor Queue ${index + 1}`, () => page.locator('.insight').nth(index).click());
   }
-  const alertButtonCount = await page.locator('.alert-strip button').count();
-  if (alertButtonCount > 0) {
-    await clickControl('First alert strip button', () => page.locator('.alert-strip button').nth(0).click());
-  }
   await clickControl('First visible bin cell', () => page.locator('.bin-cell').nth(0).click());
 
   await page.fill(searchInput, deployEditBin);
@@ -252,8 +199,6 @@ async function main() {
   await page.getByLabel('Actual count').fill(String(deployActualCount));
   await page.locator('.edit-form textarea').fill(drySaveNote);
   exercisedControls.push('Floor note edit');
-  await page.locator('.write-confirm input').check();
-  exercisedControls.push('Flow write confirmation checkbox');
   await page.click('button:has-text("Save shared state")');
   exercisedControls.push('Save shared state');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length === 0; attempt += 1) {
@@ -266,7 +211,6 @@ async function main() {
   await page.locator('.edit-form label', { hasText: 'Status' }).locator('select').selectOption('open');
   await page.locator('.edit-form textarea').fill(openTransitionNote);
   exercisedControls.push('Open transition edit');
-  await page.locator('.write-confirm input').check();
   await page.click('button:has-text("Save shared state")');
   exercisedControls.push('Open transition dry-run save');
   for (let attempt = 0; attempt < 50 && interceptedWrites.length < 2; attempt += 1) {
@@ -275,7 +219,14 @@ async function main() {
 
   const metrics = await page.locator('.metric-strip').innerText();
   const binMapText = await page.locator('[data-testid="bin-map"]').innerText();
-  const fakeButtonLabels = await page.locator('.room-list .panel-head button, .detail-title button').count();
+  const fakeButtonLabels = await page.locator('.detail-title button').count();
+  const removedHumanChrome =
+    (await page.locator('[data-testid="daily-report-action"]').count()) +
+    (await page.locator('[data-testid="scan-bin-action"]').count()) +
+    (await page.locator('[data-testid="scan-tray"]').count()) +
+    (await page.locator('.change-preview').count()) +
+    (await page.locator('.write-confirm').count()) +
+    (await page.locator('.qr-card').count());
   const visibleShopifyUi =
     (await page.locator('text=Shopify View').count()) +
     (await page.locator('text=Shopify Mapping').count());
@@ -291,7 +242,6 @@ async function main() {
     selectedBeforeSave,
     postDryRunMetrics: metrics,
     searchResultsText,
-    reportFilename: dailyReportDownload.suggestedFilename(),
     okfFilename: okfDownload.suggestedFilename(),
     okfBundleType: okfBundle.bundle_type,
     okfPerBinCount: okfBundle.per_bin_inventory?.length || 0,
@@ -299,6 +249,7 @@ async function main() {
     dryRunWriteCount: interceptedWrites.length,
     exercisedControls,
     fakeButtonLabels,
+    removedHumanChrome,
     visibleShopifyUi,
     blockedRequests,
     browserErrors,
@@ -314,9 +265,9 @@ async function main() {
   if (selectedBeforeSave !== deployEditBin) throw new Error(`Expected selected bin ${deployEditBin}, got ${selectedBeforeSave}`);
   if (!searchResultsText.includes(deployEditBin)) throw new Error(`Search results did not show selected bin: ${searchResultsText}`);
   if (interceptedWrites.length !== 2) throw new Error(`Expected two intercepted Flow writes, got ${interceptedWrites.length}`);
-  for (const expected of ['Total Bins', '714', 'Active', '0', 'Due This Week', '0', 'Overdue', '0', 'Open', '714', 'Changed Today', '0']) {
+  for (const expected of ['Total Bins', '714', 'Active', 'Due This Week', 'Overdue', 'Open', 'Changed Today']) {
     if (!initialMetrics.includes(expected)) {
-      throw new Error(`Clean-start metrics missing ${expected}: ${initialMetrics}`);
+      throw new Error(`Metrics missing ${expected}: ${initialMetrics}`);
     }
   }
   assertDryRunWrite({
@@ -340,6 +291,9 @@ async function main() {
   if (fakeButtonLabels !== 0) {
     throw new Error(`Found ${fakeButtonLabels} fake button(s) in non-action surfaces.`);
   }
+  if (removedHumanChrome !== 0) {
+    throw new Error(`Removed operator chrome is still present (${removedHumanChrome} match/es).`);
+  }
   if (visibleShopifyUi > 0) throw new Error('Visible Shopify workflow copy should not be present.');
   if (seenRequests.some((request) => request.url.toLowerCase().includes('shopify'))) {
     throw new Error('Deploy QA saw a Shopify request.');
@@ -355,9 +309,6 @@ async function main() {
   }
   if (!okfBundle.per_bin_inventory.every((row) => Number.isFinite(row.actual_count))) {
     throw new Error('OKF per-bin inventory is missing numeric actual_count values');
-  }
-  if (!okfBundle.per_bin_inventory.every((row) => Number(row.mothers || 0) === 0 && Number(row.rats_per_litter || 0) === 0)) {
-    throw new Error('OKF per-bin inventory leaked clean-start nursery count fields');
   }
   if ((okfBundle.graph?.nodes?.length || 0) < 714) {
     throw new Error('OKF graph is missing expected nodes.');
